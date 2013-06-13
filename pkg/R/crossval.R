@@ -176,8 +176,12 @@ crossval <- function(x,
   best.fit <- do.call(quadrupen, c(list(x=x,y=y),args))
 
   ## Finally recover the CV choice (minimum and 1-se rule)
-  beta.min <- best.fit@coefficients[match(lambda1.min, args$lambda1),]
-  beta.1se <- best.fit@coefficients[match(lambda1.1se, args$lambda1),]
+  ind.max <- nrow(best.fit@coefficients)
+  ind.min <- min(match(lambda1.min, args$lambda1),ind.max)
+  ind.1se <- min(match(lambda1.1se, args$lambda1),ind.max)
+
+  beta.min <- best.fit@coefficients[ind.min,]
+  beta.1se <- best.fit@coefficients[ind.1se,]
 
   return(new("cvpen",
              lambda1     = args$lambda1,
