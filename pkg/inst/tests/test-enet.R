@@ -4,12 +4,24 @@ test_that("Consistency between 'quadrupen' and 'elasticnet' packages", {
 
   require(elasticnet)
 
-  get.coef <- function(x,y,intercept,naive=FALSE) {
+  get.coef <- function(x,y,intercept,normalize=TRUE,naive=FALSE) {
     lambda2 <- runif(1,0,10)
-    enet.larsen <- enet(x,y,lambda=lambda2,intercept=intercept)
+    enet.larsen <- enet(x,y,lambda=lambda2,intercept=intercept,normalize=normalize)
     iols <- length(enet.larsen$penalty)
     lambda1 <- enet.larsen$penalty[-iols]/2
-    enet.quadru <- elastic.net(x,y,intercept=intercept,lambda1=lambda1, lambda2=lambda2, naive=naive)
+    if (!normalize) {
+      if (intercept) {
+        normx <- sqrt(drop(colSums(x^2)- nrow(x)*colMeans(x)^2))
+      } else {
+        normx <- sqrt(drop(colSums(x^2)))
+      }
+      struct <- diag(1/normx^2)
+    } else {
+      struct <- diag(rep(1,ncol(x)))
+    }
+    enet.quadru <- elastic.net(x,y,intercept=intercept,lambda1=lambda1, struct=struct,lambda2=lambda2, naive=naive, control=list(call.from.mv=!normalize,method="quadra"))
+    coef.quad=as.matrix(enet.quadru@coefficients)
+    coef.enet=predict(enet.larsen, type="coefficients",naive=naive)$coefficients[-iols,]
     return(list(coef.quad=as.matrix(enet.quadru@coefficients),
                 coef.enet=predict(enet.larsen, type="coefficients",naive=naive)$coefficients[-iols,]))
   }
@@ -36,6 +48,22 @@ test_that("Consistency between 'quadrupen' and 'elasticnet' packages", {
   expect_that(without.intercept$coef.quad,
               is_equivalent_to(without.intercept$coef.enet))
 
+  with.intercept <-get.coef(x,y,intercept=TRUE,normalize=FALSE,naive=TRUE)
+  expect_that(with.intercept$coef.quad,
+              is_equivalent_to(with.intercept$coef.enet))
+
+  without.intercept <-get.coef(x,y,intercept=FALSE,normalize=FALSE,naive=TRUE)
+  expect_that(without.intercept$coef.quad,
+              is_equivalent_to(without.intercept$coef.enet))
+
+  with.intercept <-get.coef(x,y,intercept=TRUE,normalize=FALSE,naive=FALSE)
+  expect_that(with.intercept$coef.quad,
+              is_equivalent_to(with.intercept$coef.enet))
+
+  without.intercept <-get.coef(x,y,intercept=FALSE,normalize=FALSE,naive=FALSE)
+  expect_that(without.intercept$coef.quad,
+              is_equivalent_to(without.intercept$coef.enet))
+  
   ## RANDOM DATA
   seed <- sample(1:10000,1)
   ## cat(" #seed=",seed)
@@ -53,6 +81,38 @@ test_that("Consistency between 'quadrupen' and 'elasticnet' packages", {
   x <- as.matrix(matrix(rnorm(95*n),n,95) %*% chol(Sigma))
   y <- 10 + x %*% beta + rnorm(n,0,10)
 
+  ## Run the tests...
+  with.intercept <-get.coef(x,y,intercept=TRUE,naive=TRUE)
+  expect_that(with.intercept$coef.quad,
+              is_equivalent_to(with.intercept$coef.enet))
+
+  without.intercept <-get.coef(x,y,intercept=FALSE,naive=TRUE)
+  expect_that(without.intercept$coef.quad,
+              is_equivalent_to(without.intercept$coef.enet))
+
+  with.intercept <-get.coef(x,y,intercept=TRUE,naive=FALSE)
+  expect_that(with.intercept$coef.quad,
+              is_equivalent_to(with.intercept$coef.enet))
+
+  without.intercept <-get.coef(x,y,intercept=FALSE,naive=FALSE)
+  expect_that(without.intercept$coef.quad,
+              is_equivalent_to(without.intercept$coef.enet))
+
+  with.intercept <-get.coef(x,y,intercept=TRUE,normalize=FALSE,naive=TRUE)
+  expect_that(with.intercept$coef.quad,
+              is_equivalent_to(with.intercept$coef.enet))
+
+  without.intercept <-get.coef(x,y,intercept=FALSE,normalize=FALSE,naive=TRUE)
+  expect_that(without.intercept$coef.quad,
+              is_equivalent_to(without.intercept$coef.enet))
+
+  with.intercept <-get.coef(x,y,intercept=TRUE,normalize=FALSE,naive=FALSE)
+  expect_that(with.intercept$coef.quad,
+              is_equivalent_to(with.intercept$coef.enet))
+
+  without.intercept <-get.coef(x,y,intercept=FALSE,normalize=FALSE,naive=FALSE)
+  expect_that(without.intercept$coef.quad,
+              is_equivalent_to(without.intercept$coef.enet))
   ## Run the tests...
   with.intercept <-get.coef(x,y,intercept=TRUE)
   expect_that(with.intercept$coef.quad,

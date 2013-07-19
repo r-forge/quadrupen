@@ -4,11 +4,11 @@ test_that("Consistency between 'quadrupen' and 'lars' packages", {
 
   require(lars)
 
-  get.coef <- function(x,y,intercept) {
-      lasso.larsen <- lars(x,y,intercept=intercept)
+  get.coef <- function(x,y,intercept,normalize) {
+      lasso.larsen <- lars(x,y,intercept=intercept,normalize=normalize)
       iols <- nrow(lasso.larsen$beta) ## remove last entry corresponding to the OLS estimator
       lambda1 <-  lasso.larsen$lambda ## usde the lars lambda grid
-      lasso.quadru <- elastic.net(x,y, intercept=intercept, lambda1=lambda1, lambda2=0, control=list(method="quadra"))
+      lasso.quadru <- elastic.net(x,y, intercept=intercept, lambda1=lambda1, lambda2=0, control=list(call.from.mv=!normalize,method="quadra"))
       return(list(coef.quad=as.matrix(lasso.quadru@coefficients),
                   coef.lars=lasso.larsen$beta[-iols, ]))
   }
@@ -19,13 +19,21 @@ test_that("Consistency between 'quadrupen' and 'lars' packages", {
   y <- prostate[,9]
 
   ## Run the tests...
-  with.intercept <-get.coef(x,y,intercept=TRUE)
+  with.intercept <-get.coef(x,y,TRUE,TRUE)
   expect_that(with.intercept$coef.quad,
               is_equivalent_to(with.intercept$coef.lars))
 
-  without.intercept <-get.coef(x,y,intercept=FALSE)
+  with.intercept.unnormalized <-get.coef(x,y,TRUE,FALSE)
+  expect_that(with.intercept.unnormalized$coef.quad,
+              is_equivalent_to(with.intercept.unnormalized$coef.lars))
+  
+  without.intercept <-get.coef(x,y,FALSE,TRUE)
   expect_that(without.intercept$coef.quad,
               is_equivalent_to(without.intercept$coef.lars))
+
+  without.intercept.unnormalized <-get.coef(x,y,FALSE,FALSE)
+  expect_that(without.intercept.unnormalized$coef.quad,
+              is_equivalent_to(without.intercept.unnormalized$coef.lars))
 
   ## RANDOM DATA
   seed <- sample(1:10000,1)
@@ -45,13 +53,21 @@ test_that("Consistency between 'quadrupen' and 'lars' packages", {
   y <- 10 + x %*% beta + rnorm(n,0,10)
 
   ## Run the tests...
-  with.intercept <-get.coef(x,y,intercept=TRUE)
+  with.intercept <-get.coef(x,y,TRUE,TRUE)
   expect_that(with.intercept$coef.quad,
               is_equivalent_to(with.intercept$coef.lars))
 
-  without.intercept <-get.coef(x,y,intercept=FALSE)
+  with.intercept.unnormalized <-get.coef(x,y,TRUE,FALSE)
+  expect_that(with.intercept.unnormalized$coef.quad,
+              is_equivalent_to(with.intercept.unnormalized$coef.lars))
+  
+  without.intercept <-get.coef(x,y,FALSE,TRUE)
   expect_that(without.intercept$coef.quad,
               is_equivalent_to(without.intercept$coef.lars))
+
+  without.intercept.unnormalized <-get.coef(x,y,FALSE,FALSE)
+  expect_that(without.intercept.unnormalized$coef.quad,
+              is_equivalent_to(without.intercept.unnormalized$coef.lars))
 
 })
 
