@@ -8,7 +8,8 @@ test_that("Consistency between 'quadrupen' and 'lars' packages", {
       lasso.larsen <- lars(x,y,intercept=intercept,normalize=normalize)
       iols <- nrow(lasso.larsen$beta) ## remove last entry corresponding to the OLS estimator
       lambda1 <-  lasso.larsen$lambda ## usde the lars lambda grid
-      lasso.quadru <- elastic.net(x,y, intercept=intercept, lambda1=lambda1, lambda2=0, control=list(call.from.mv=!normalize,method="quadra"))
+      lasso.quadru <- elastic.net(x,y, intercept=intercept, normalize=normalize,
+                                  lambda1=lambda1, lambda2=0, control=list(method="quadra"))
       return(list(coef.quad=as.matrix(lasso.quadru@coefficients),
                   coef.lars=lasso.larsen$beta[-iols, ]))
   }
@@ -26,7 +27,7 @@ test_that("Consistency between 'quadrupen' and 'lars' packages", {
   with.intercept.unnormalized <-get.coef(x,y,TRUE,FALSE)
   expect_that(with.intercept.unnormalized$coef.quad,
               is_equivalent_to(with.intercept.unnormalized$coef.lars))
-  
+
   without.intercept <-get.coef(x,y,FALSE,TRUE)
   expect_that(without.intercept$coef.quad,
               is_equivalent_to(without.intercept$coef.lars))
@@ -60,7 +61,7 @@ test_that("Consistency between 'quadrupen' and 'lars' packages", {
   with.intercept.unnormalized <-get.coef(x,y,TRUE,FALSE)
   expect_that(with.intercept.unnormalized$coef.quad,
               is_equivalent_to(with.intercept.unnormalized$coef.lars))
-  
+
   without.intercept <-get.coef(x,y,FALSE,TRUE)
   expect_that(without.intercept$coef.quad,
               is_equivalent_to(without.intercept$coef.lars))

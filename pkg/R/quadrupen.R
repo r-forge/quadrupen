@@ -8,9 +8,9 @@
 ##' regularization. See details for the criterion optimized.
 ##'
 ##' @param x matrix of features, possibly sparsely encoded
-##' (experimental). Do NOT include intercept. Predictors are
-##' normalized internally to have unit L2 norm before fitting.
-##' Coefficients will then be rescaled to the original scale.
+##' (experimental). Do NOT include intercept. When normalized os
+##' \code{TRUE}, coefficients will then be rescaled to the original
+##' scale.
 ##'
 ##' @param y response vector.
 ##'
@@ -35,6 +35,10 @@
 ##'
 ##' @param intercept logical; indicates if an intercept should be
 ##' included in the model. Default is \code{TRUE}.
+##'
+##' @param normalize logical; indicates if variables should be
+##' normalized to have unit L2 norm before fitting.  Default is
+##' \code{TRUE}.
 ##'
 ##' @param naive logical; Compute either 'naive' of classic
 ##' elastic-net as defined in Zou and Hastie (2006): the vector of
@@ -166,6 +170,7 @@ elastic.net <- function(x,
                         penscale  = rep(1,p),
                         struct    = NULL,
                         intercept = TRUE,
+                        normalize = TRUE,
                         naive     = FALSE,
                         nlambda1  = ifelse(is.null(lambda1),100,length(lambda1)),
                         min.ratio = ifelse(n<=p,1e-2,1e-4),
@@ -222,6 +227,7 @@ elastic.net <- function(x,
                    penscale  = penscale,
                    struct    = struct,
                    intercept = intercept,
+                   normalize = normalize,
                    naive     = naive,
                    nlambda1  = nlambda1,
                    min.ratio = min.ratio,
@@ -241,9 +247,9 @@ elastic.net <- function(x,
 ##' optimized.
 ##'
 ##' @param x matrix of features, possibly sparsely encoded
-##' (experimental). Do NOT include intercept. Predictors are
-##' normalized internally to have unit L2 norm before fitting.
-##' Coefficients will then be rescaled to the original scale.
+##' (experimental). Do NOT include intercept. When normalized os
+##' \code{TRUE}, coefficients will then be rescaled to the original
+##' scale.
 ##'
 ##' @param y response vector.
 ##'
@@ -271,6 +277,10 @@ elastic.net <- function(x,
 ##'
 ##' @param intercept logical; indicates if an intercept should be
 ##' included in the model. Default is \code{TRUE}.
+##'
+##' @param normalize logical; indicates if variables should be
+##' normalized to have unit L2 norm before fitting.  Default is
+##' \code{TRUE}.
 ##'
 ##' @param naive logical; Compute either 'naive' of 'classic' bounded
 ##' regression: mimicing the Elastic-net, the vector of parameters is
@@ -410,6 +420,7 @@ bounded.reg <- function(x,
                         penscale  = rep(1,p),
                         struct    = NULL,
                         intercept = TRUE,
+                        normalize = TRUE,
                         naive     = FALSE,
                         nlambda1  = ifelse(is.null(lambda1),100,length(lambda1)),
                         min.ratio = ifelse(n<=p,1e-2,1e-3),
@@ -466,6 +477,7 @@ bounded.reg <- function(x,
                    penscale  = penscale,
                    struct    = struct,
                    intercept = intercept,
+                   normalize = normalize,
                    naive     = naive,
                    nlambda1  = nlambda1,
                    min.ratio = min.ratio,
@@ -482,6 +494,7 @@ quadrupen <- function(x,
                       penscale ,
                       struct   ,
                       intercept,
+                      normalize,
                       naive    ,
                       nlambda1 ,
                       min.ratio,
@@ -504,8 +517,7 @@ quadrupen <- function(x,
                method       = "quadra",
                threshold    = ifelse(quadra, 1e-7, 1e-2),
                monitor      = 0,
-               bulletproof  = TRUE,
-               call.from.mv = FALSE)
+               bulletproof  = TRUE)
   ctrl[names(control)] <- control # overwritten by user specifications
   if (ctrl$timer) {r.start <- proc.time()}
 
@@ -514,8 +526,7 @@ quadrupen <- function(x,
                         "bounded.reg" = get.lambda1.li)
   ## ======================================================
   ## INTERCEPT AND NORMALIZATION TREATMENT
-  input <- standardize(x,y,intercept,penscale,
-                       call.from.mv=ctrl$call.from.mv)
+  input <- standardize(x,y,intercept,normalize,penscale)
 
   ## ======================================================
   ## GENERATE A GRID OF PENALTY IF NONE HAS BEEN PROVIDED
@@ -524,13 +535,19 @@ quadrupen <- function(x,
 
   ## ======================================================
   ## STRUCTURATING MATRIX
-  if (is.null(struct))
-      struct <- sparseMatrix(i=1:p,j=1:p,x=rep(1,p))
+  if (is.null(struct)) {
+    struct <- sparseMatrix(i=1:p,j=1:p,x=rep(1,p))
+  }
   if (lambda2 > 0) {
-    D <- Diagonal(x=1/penscale) ## renormalize the l2 structruring
-                                ## matrix according to the l1 penscale
-                                ## values, so as it does not interfere
-                                ## with the l2 penalty
+    ## renormalize the l2 structuring matrix according to the l1
+    ## penscale values and the l2.norm of the predictor, so as it does
+    ## not interfer with the l2 penalty.
+    if (normalize) { # here l2.norm is 1 because of normalization
+      D.diag <- 1/(penscale)
+    } else {
+      D.diag <- 1/(penscale * input$l2.pred)
+    }
+    D <- Diagonal(x=D.diag)
     struct <- D %*% as(struct, "dgCMatrix") %*% D
     S <- list(Si = struct@i, Sp = struct@p, Sx = lambda2*struct@x)
   } else {
@@ -662,8 +679,7 @@ quadrupen <- function(x,
 
 }
 
-standardize <- function(x,y,intercept,penscale,zero=.Machine$double.eps,
-                        call.from.mv = FALSE) {
+standardize <- function(x,y,intercept,normalize,penscale,zero=.Machine$double.eps) {
 
   n <- length(y)
   p <- ncol(x)
@@ -679,18 +695,19 @@ standardize <- function(x,y,intercept,penscale,zero=.Machine$double.eps,
 
   ## ============================================
   ## NORMALIZATION
-  if (call.from.mv) { ## already scaled...
-    normx <- rep(1,p)
-  } else {
-    normx <- sqrt(drop(colSums(x^2)- n*xbar^2))
-    if (any(normx < zero)) {
-      warning("A predictor has no signal: you should remove it.")
-      normx[abs(normx) < zero] <- 1 ## dirty way to handle 0/0
-    }
+  l2.pred <- sqrt(drop(colSums(x^2)- n*xbar^2)) ##
+  if (any(l2.pred < zero)) {
+    warning("A predictor has no signal: you should remove it.")
+    norm[abs(l2.pred) < zero] <- 1 ## dirty way to handle 0/0
   }
-  ## xbar is scaled to handle internaly the centering of X for
-  ## sparsity purpose
-  xbar <- xbar/normx
+  if (normalize) {
+    ## xbar is scaled to handle internaly the centering of X for
+    ## sparsity purpose
+    normx <- l2.pred
+    xbar <- xbar/normx
+  } else {
+    normx <- rep(1,p)
+  }
   normy <- sqrt(sum(y^2))
 
   ## normalizing the predictors...
@@ -710,7 +727,7 @@ standardize <- function(x,y,intercept,penscale,zero=.Machine$double.eps,
     xty   <- drop(crossprod(y-ybar,scale(x$Xx,xbar,FALSE)))
   }
 
-  return(list(xbar=xbar, ybar=ybar, normx=normx, normy=normy, xty=xty, x=x))
+  return(list(xbar=xbar, ybar=ybar, normx=normx, normy=normy, xty=xty, x=x, l2.pred=l2.pred))
 }
 
 ## ======================================================

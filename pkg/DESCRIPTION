@@ -1,7 +1,7 @@
 Package: quadrupen
 Type: Package
 Title: Sparsity by Worst-Case Quadratic Penalties
-Version: 0.2-2
+Version: 0.2-3
 Date: 2013-02-27
 Author: Julien Chiquet
 Maintainer: Julien Chiquet <julien.chiquet@genopole.cnrs.fr>
@@ -10,11 +10,27 @@ Description: This package fits classical sparse regression models with
     provides a few methods for model selection purpose (cross-validation,
     stability selection).
 License: GPL (>=2)
-Depends: methods, ggplot2, Matrix
-Imports: Rcpp, RcppArmadillo, reshape2, scales, grid, parallel
-Suggests: testthat
+Depends:
+    methods,
+    ggplot2,
+    Matrix
+Imports:
+    Rcpp,
+    RcppArmadillo,
+    reshape2,
+    scales,
+    grid,
+    parallel
+Suggests:
+    testthat
 LinkingTo: Rcpp, RcppArmadillo
-Collate: 'init.R' 'quadrupen-package.R' 'quadrupen-class.R'
-        'quadrupen.R' 'crossval-class.R' 'crossval.R'
-        'stability-class.R' 'stability.R'
+Collate:
+    'init.R'
+    'quadrupen-package.R'
+    'quadrupen-class.R'
+    'quadrupen.R'
+    'crossval-class.R'
+    'crossval.R'
+    'stability-class.R'
+    'stability.R'
 Packaged: 2013-03-25 19:41:00 UTC; jchiquet

@@ -9,17 +9,8 @@ test_that("Consistency between 'quadrupen' and 'elasticnet' packages", {
     enet.larsen <- enet(x,y,lambda=lambda2,intercept=intercept,normalize=normalize)
     iols <- length(enet.larsen$penalty)
     lambda1 <- enet.larsen$penalty[-iols]/2
-    if (!normalize) {
-      if (intercept) {
-        normx <- sqrt(drop(colSums(x^2)- nrow(x)*colMeans(x)^2))
-      } else {
-        normx <- sqrt(drop(colSums(x^2)))
-      }
-      struct <- diag(1/normx^2)
-    } else {
-      struct <- diag(rep(1,ncol(x)))
-    }
-    enet.quadru <- elastic.net(x,y,intercept=intercept,lambda1=lambda1, struct=struct,lambda2=lambda2, naive=naive, control=list(call.from.mv=!normalize,method="quadra"))
+    enet.quadru <- elastic.net(x,y,intercept=intercept,normalize=normalize,
+                               lambda1=lambda1, lambda2=lambda2, naive=naive)
     coef.quad=as.matrix(enet.quadru@coefficients)
     coef.enet=predict(enet.larsen, type="coefficients",naive=naive)$coefficients[-iols,]
     return(list(coef.quad=as.matrix(enet.quadru@coefficients),
@@ -63,7 +54,7 @@ test_that("Consistency between 'quadrupen' and 'elasticnet' packages", {
   without.intercept <-get.coef(x,y,intercept=FALSE,normalize=FALSE,naive=FALSE)
   expect_that(without.intercept$coef.quad,
               is_equivalent_to(without.intercept$coef.enet))
-  
+
   ## RANDOM DATA
   seed <- sample(1:10000,1)
   ## cat(" #seed=",seed)

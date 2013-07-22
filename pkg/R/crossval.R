@@ -123,7 +123,7 @@ crossval <- function(x,
   args <- modifyList(defs, user)
   ## Compute a grid of lambda1 (the same for each fold)
   if (is.null(args$lambda1)) {
-    input <- standardize(x,y,args$intercept,args$penscale)
+    input <- standardize(x,y,args$intercept,args$normalize,args$penscale)
     args$lambda1 <- get.lambda1(input$xty,args$nlambda1,args$min.ratio)
     rm(input)
   }
@@ -239,6 +239,7 @@ default.args <- function(penalty,n,p,user) {
     penscale  = rep(1,p),
     struct    = NULL,
     intercept = TRUE,
+    normalize = TRUE,
     naive     = FALSE,
     nlambda1  = ifelse(is.null(user$lambda1),100,length(user$lambda1)),
     min.ratio = ifelse(n<p,0.01,5e-3),
