@@ -8,14 +8,13 @@
 using namespace Rcpp;
 using namespace arma;
 
-SEXP elastic_net(SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA2, SEXP XBAR, SEXP NORMX, SEXP NORMY, SEXP WEIGHTS, SEXP NAIVE, SEXP EPS, SEXP MAXITER, SEXP MAXFEAT, SEXP FUN, SEXP VERBOSE, SEXP SPARSE, SEXP MONITOR) {
+SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA2, SEXP XBAR, SEXP NORMX, SEXP NORMY, SEXP WEIGHTS, SEXP NAIVE, SEXP EPS, SEXP MAXITER, SEXP MAXFEAT, SEXP FUN, SEXP VERBOSE, SEXP SPARSE, SEXP MONITOR) {
 
   // disable messages being printed to the err2 stream
   std::ostream nullstream(0);
   set_stream_err2(nullstream);
 
   // Reading input variables
-  List   SX       = List       (X)         ; // sparsely encoded SCALED design matrix
   vec    lambda1  = as<vec>    (LAMBDA1)   ; // penalty levels
   double lambda2  = as<double> (LAMBDA2)   ; // the smooth (ridge) penality
   vec    xbar     = as<vec>    (XBAR)      ; // mean of the predictors
@@ -32,37 +31,30 @@ SEXP elastic_net(SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA2, SEXP XBAR
   uword  max_iter = as<int>    (MAXITER)   ; // max # of iterates of the active set
   uword  max_feat = as<int>    (MAXFEAT)   ; // max # of variables activated
   // Managing the sparse encoding of the structuring matrix
-  List SS                                  ; // sparsely encoded structuring matrix
-  uvec Si                                  ; // row indices of nonzeros
-  uvec Sp                                  ; // col indices of nonzeros
-  vec  Sx                                  ; // values of nonzeros
-  vec  Sxnzero                             ; // temporary variables used for
-  uvec Sjnzero                             ; // updating the Gram matrix
-  if (S != R_NilValue) { // Check if their is any structure to read
-    SS    = List(S)                        ;
-    Si    = as<uvec>(SS[0])                ;
-    Sp    = as<uvec>(SS[1])                ;
-    Sx    = as<vec> (SS[2])                ;
-  }
+  sp_mat spS      = convertSparse(S)       ; // sparsely encoded structuring matrix
 
-  // Managing the design matrix is both cases of sparse or dense coding
+  // Managing the design matrix in both cases of sparse or dense coding
   mat  x                                   ; // dense encoding of the design matrix
+  List SX                                  ; // sparsely encoded SCALED design matrix
   uvec Xi                                  ; // row indices of nonzeros
   uvec Xp                                  ; // indices of first nonzero of each column
   uvec Xnp                                 ; // # of nonzero in each column
   vec  Xx                                  ; // values of nonzeros
   uvec j_nz                                ; // consider just the column of X which are non zero
+
   if (sparse == 1) { // Check how x is encoded for reading
+    SX        = List(X)        ;
     Xi        = as<uvec>(SX[0]);
     Xp        = as<uvec>(SX[1]);
     Xnp       = as<uvec>(SX[2]);
     Xx        = as<vec> (SX[3]);
     j_nz = find(Xnp > 0);
   } else {
-    x = as<mat>(SX[0]) - sqrt(weights) * trans(xbar) ;
+    x = as<mat>(X) - sqrt(weights) * trans(xbar) ;
   }
-
+  
   // Initializing "first level" variables (outside of the lambda1 loop)
+  mat  R                                 ; // Cholesky decomposition of XAtXA
   uword n        = weights.n_elem        ; // sample size
   uword p        = xty.n_elem            ; // problem size
   uword n_lambda = lambda1.n_elem        ; // # of penalty
@@ -71,8 +63,8 @@ SEXP elastic_net(SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA2, SEXP XBAR
   mat  xtxA                              ; // t(x) * x_A  covariance matrix
   mat  xAtxA                             ; // t(x_A) * x_A covariance matrix of the activated variable
   vec  xtxw                              ; // t(x_A) * x_A * beta(A)
-  mat  R                                 ; // Cholesky decomposition of XAtXA
   vec  grd       = -xty                  ; // smooth part of the gradient
+  
   vec  max_grd   = zeros<vec>(n_lambda)  ; // a vector with the successively reach duality gap
   vec  converge  = zeros<vec>(n_lambda)  ; // a vector indicating if convergence occured (0/1/2)
   uvec it_active = zeros<uvec>(n_lambda) ; // # of loop in the active set for each lambda1
@@ -94,6 +86,28 @@ SEXP elastic_net(SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA2, SEXP XBAR
   mat   iA                               ; // contains row indices of the non-zero values
   mat   jA                               ; // contains column indices of the non-zero values
 
+  vec beta0 ;
+  // WARM START
+  if (BETA0 != R_NilValue) {
+    beta0 = as<vec>(BETA0) ;
+    A = find(beta0 != 0) ;
+    betaA = beta0.elem(A) ;
+    xtxA = trans(x) * x.cols(A) ;
+    for (int i=0; i<A.n_elem;i++) {
+      xtxA.col(i) = xtxA.col(i) + spS.col(A(i));
+      are_in(A(i)) = 1;
+    }
+    grd += xtxA * betaA    ;
+    nbr_in = A.n_elem;
+    xAtxA = xtxA.rows(A)   ;
+    if (fun == 0) {
+      R = chol(xAtxA) ;
+    }
+    if (fun == 1) {
+      xtxw(nbr_in) = dot(xAtxA.col(nbr_in),betaA);
+    }
+  }
+  
   // Additional variable for convergence monitoring
   vec D_hat    ;
   vec D_star   ;
@@ -128,7 +142,7 @@ SEXP elastic_net(SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA2, SEXP XBAR
 
       // Check if the variable is already in the active set
       if (are_in[var_in] == 0) {
-	add_var_enet(n, nbr_in, var_in, betaA, A, x, xtxA, xAtxA, xtxw, R, lambda2, xbar, Xx, Xi, Xp, Xnp, j_nz, Sx, Si, Sp, sparse, fun) ;
+	add_var_enet(n, nbr_in, var_in, betaA, A, x, xtxA, xAtxA, xtxw, R, lambda2, xbar, Xx, Xi, Xp, Xnp, j_nz, spS, sparse, fun) ;
 	if (verbose == 2) {Rprintf("newly added variable %i\n",var_in);}
 	are_in[var_in] = 1;
 	nbr_in++;
@@ -176,17 +190,6 @@ SEXP elastic_net(SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA2, SEXP XBAR
 	}
 	remove_var_enet(nbr_in,are_in,betaA,A,xtxA,xAtxA,xtxw,R,null,fun) ;
       }
-
-      // Seems useless (handled by the while loop over the optimality conditions)
-      // For Quadratic solver only: check sign coherency between the updated gradient and variable lastly optimized
-      // if (fun == 0 & it_optim[nbr_opt-1] <= 1) {
-      // 	// if not, reoptimize...
-      // 	if (nbr_in > 0 & sign(grd[var_in], ZERO) == sign(betaA[nbr_in-1], ZERO)) {
-      // 	  it_optim.reshape(nbr_opt + 1,1) ;
-      // 	  it_optim[nbr_opt] += quadra_enet(betaA, R, xty.elem(A), signs(grd.elem(A), ZERO), lambda1[m], null, ZERO);
-      // 	  grd = -xty + xtxA * betaA;
-      // 	}
-      // }
 
       // _____________________________________________________________
       //
@@ -318,11 +321,9 @@ void choldowndate(mat &R, int j) {
   R.shed_row(p);
 }
 
-void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat &x, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, double &lambda2,
-		  vec &xbar, vec &Xx, uvec &Xi, uvec &Xp, uvec &Xnp, uvec &j_nz, vec &Sx, uvec &Si, uvec& Sp, bool &sparse, uword &fun) {
-
-  vec  Sxnzero   ; // temporary variables used for
-  uvec Sjnzero   ; // updating the Gram matrix
+void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat &x, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, 
+		  double &lambda2, vec &xbar, vec &Xx, uvec &Xi, uvec &Xp, uvec &Xnp, uvec &j_nz, sp_mat &spS, bool &sparse, uword &fun) {
+  
   vec  new_col   ; // column currently added to xtxA
   vec  col_Vx    ;
   uvec col_Xi    ;
@@ -334,13 +335,8 @@ void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat
   betaA.resize(nbr_in+1) ; // update the vector of active parameters
   betaA[nbr_in]  = 0.0   ;
 
-  // Update the xtxA and xAtxA matrices
-  if (nbr_in > 0) {
-    xAtxA = join_cols(xAtxA, xtxA.row(var_in)) ;
-  }
-
-  // This would greatly simply if Iused the armadillo sparse features
-  // Yet, it requires importation of sparseMatrix fro R vuia Rcpp
+  // This would greatly simply if I used the armadillo sparse features
+  // Yet, it requires importation of sparseMatrix froM R via Rcpp
   if (sparse == 1) {
     // if any nonzero in the X[, var] column, do the sparse product
     new_col = zeros<vec>(xbar.n_elem) ;
@@ -358,38 +354,40 @@ void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat
   } else {
     new_col = trans(x) * x.col(var_in);
   }
-
   if (lambda2 > 0) {
-    // Sparse product with the structurating matrix
-    Sxnzero = Sx.subvec(Sp[var_in],Sp[var_in+1]-1) ;
-    Sjnzero = Si.subvec(Sp[var_in],Sp[var_in+1]-1) ;
-    new_col.elem(Sjnzero) += new_col.elem(Sjnzero) % Sxnzero ;
+    // Adding the column corresponding to the structurating matrix
+    new_col += spS.col(var_in);
   }
-
+    
+  // UPDATE THE xtxA AND xAtxA MATRICES
+  if (nbr_in > 0) {
+    xAtxA = join_cols(xAtxA, xtxA.row(var_in)) ;
+  }
   xtxA  = join_rows(xtxA, new_col) ;
-  xAtxA = join_rows(xAtxA, trans(xtxA.row(var_in))) ;
+  xAtxA = join_rows(xAtxA, trans(xtxA.row(var_in))) ;    
+
   if (fun == 0) {
     cholupdate(R, xAtxA) ;
   }
+
   if (fun == 1) {
     xtxw.resize(nbr_in+1) ;
     xtxw(nbr_in) = dot(xAtxA.col(nbr_in),betaA);
   }
-
 }
 
 void remove_var_enet(int &nbr_in, uvec &are_in, vec &betaA, uvec &A, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, uvec &null, uword &fun) {
-
+  
   for (int j=0; j<null.n_elem; j++) {
     are_in[A(null[j])]  = 0 ;
     A.shed_row(null[j])     ;
     betaA.shed_row(null[j]) ;
-    xtxA.shed_col(null[j])  ;
-    xAtxA.shed_col(null[j]) ;
-    xAtxA.shed_row(null[j]) ;
     if (fun == 1) {
       xtxw.shed_row(null[j]);
     }
+    xtxA.shed_col(null[j])  ;
+    xAtxA.shed_col(null[j]) ;
+    xAtxA.shed_row(null[j]) ;
     if (fun == 0) {
       choldowndate(R, null[j]) ;
     }

@@ -27,11 +27,11 @@ test_that("Consistency between 'quadrupen' and 'elasticnet' packages", {
   expect_that(with.intercept$coef.quad,
               is_equivalent_to(with.intercept$coef.enet))
 
-  without.intercept <-get.coef(x,y,intercept=FALSE,naive=TRUE)
+  without.intercept <- get.coef(x,y,intercept=FALSE,naive=TRUE)
   expect_that(without.intercept$coef.quad,
               is_equivalent_to(without.intercept$coef.enet))
 
-  with.intercept <-get.coef(x,y,intercept=TRUE,naive=FALSE)
+  with.intercept <- get.coef(x,y,intercept=TRUE,naive=FALSE)
   expect_that(with.intercept$coef.quad,
               is_equivalent_to(with.intercept$coef.enet))
 

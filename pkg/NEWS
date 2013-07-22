@@ -2,7 +2,7 @@ NEWS/Changelog
 
 0.2-3	(2013-07-xx)
     +   added back the 'normalize' parameter
-    +   added more tests in the inst directory checking consistency of the elastic-net with other implementations.
+    +   added more tests in the inst directory
 
 0.2-2	(2013-04-08)
     +   minor fix to comply with recent ggplot2 updates.

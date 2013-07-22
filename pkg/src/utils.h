@@ -23,4 +23,5 @@ inline vec signs(vec x) {
   }
   return(signs);
 }
+sp_mat convertSparse(S4 mat) ;
 #endif 

@@ -66,6 +66,10 @@
 ##' \code{min(4*nrow(x),ncol(x))} otherwise. Use with care, as it
 ##' considerably changes the computation time.
 ##'
+##' @param beta0 a starting point for the vector of parameter. When
+##' \code{NULL} (the default), will be initialized at zero. May save
+##' time in some situation.
+##' 
 ##' @param control list of argument controlling low level options of
 ##' the algorithm --use with care and at your own risk-- :
 ##' \itemize{%
@@ -175,6 +179,7 @@ elastic.net <- function(x,
                         nlambda1  = ifelse(is.null(lambda1),100,length(lambda1)),
                         min.ratio = ifelse(n<=p,1e-2,1e-4),
                         max.feat  = ifelse(lambda2<1e-2,min(n,p),min(4*n,p)),
+                        beta0     = NULL,
                         control   = list(),
                         checkargs = TRUE) {
 
@@ -204,6 +209,8 @@ elastic.net <- function(x,
         stop("entries inlambda1 must all be postive.")
       if(is.unsorted(rev(lambda1)))
         stop("lambda1 values must be sorted in decreasing order.")
+      if (length(lambda1)>1 & !is.null(beta0))
+        warning("providing beta0 for a serie of l1 penalties mught be inefficient.")
     }
     if(min.ratio < 0)
       stop("min.ratio must be non negative.")
@@ -213,13 +220,19 @@ elastic.net <- function(x,
       if (any(eigen(struct,only.values=TRUE)$values<0))
         stop("struct must be a (square) positive semidefinite matrix.")
     }
+    if (!is.null(beta0)) {
+      beta0 <- as.numeric(beta0)
+      if (length(beta0) != p)
+        stop("beta0 must be a vector with p entries.")
+    }
     if (length(max.feat)>1)
       stop("max.feat must be an integer.")
     if(is.numeric(max.feat) & !is.integer(max.feat))
       max.feat <- as.integer(max.feat)
   }
 
-  return(quadrupen(x=x,
+  return(quadrupen(beta0 = beta0,
+                   x=x,
                    y=y,
                    penalty   = "elastic.net",
                    lambda1   = lambda1,
@@ -469,7 +482,8 @@ bounded.reg <- function(x,
       max.feat <- as.integer(max.feat)
   }
 
-  return(quadrupen(x=x,
+  return(quadrupen(beta0 = NULL,
+                   x=x,
                    y=y,
                    penalty   = "bounded.reg",
                    lambda1   = lambda1,
@@ -486,8 +500,9 @@ bounded.reg <- function(x,
          )
 }
 
-quadrupen <- function(x,
-                      y,
+quadrupen <- function(beta0    ,
+                      x        ,
+                      y        ,
                       penalty  ,
                       lambda1  ,
                       lambda2  ,
@@ -513,7 +528,7 @@ quadrupen <- function(x,
   }
   ctrl <- list(verbose      = 1, # default control options
                timer        =  FALSE,
-               max.iter     = 500,
+               max.iter     = max(500,p),
                method       = "quadra",
                threshold    = ifelse(quadra, 1e-7, 1e-2),
                monitor      = 0,
@@ -537,21 +552,16 @@ quadrupen <- function(x,
   ## STRUCTURATING MATRIX
   if (is.null(struct)) {
     struct <- sparseMatrix(i=1:p,j=1:p,x=rep(1,p))
+  } else {
+    struct <- as(struct,"dgCMatrix")
   }
   if (lambda2 > 0) {
     ## renormalize the l2 structuring matrix according to the l1
-    ## penscale values and the l2.norm of the predictor, so as it does
-    ## not interfer with the l2 penalty.
-    if (normalize) { # here l2.norm is 1 because of normalization
-      D.diag <- 1/(penscale)
-    } else {
-      D.diag <- 1/(penscale * input$l2.pred)
-    }
-    D <- Diagonal(x=D.diag)
-    struct <- D %*% as(struct, "dgCMatrix") %*% D
-    S <- list(Si = struct@i, Sp = struct@p, Sx = lambda2*struct@x)
+    ## penscale values, so as it does not interfer with the l2 penalty.
+    D <- Diagonal(x=sqrt(lambda2)/penscale)
+    S <- as(D %*% struct %*% D, "dgCMatrix")
   } else {
-    S <- NULL
+    S <- Matrix(0,p,p)
   }
 
   ## ======================================================
@@ -559,6 +569,7 @@ quadrupen <- function(x,
   if (ctrl$timer) {cpp.start <- proc.time()}
   if (penalty == "elastic.net") {
     out <- .Call("elastic_net",
+                 beta0        ,
                  input$x      ,
                  input$xty    ,
                  S            ,
@@ -590,9 +601,9 @@ quadrupen <- function(x,
   }
   if (penalty == "bounded.reg") {
     out <- .Call("bounded_reg",
-                 input$x$Xx,
+                 input$x,
                  input$xty,
-                 as.matrix(struct),
+                 as.matrix(S),
                  lambda1,
                  lambda2,
                  input$xbar,
@@ -695,15 +706,14 @@ standardize <- function(x,y,intercept,normalize,penscale,zero=.Machine$double.ep
 
   ## ============================================
   ## NORMALIZATION
-  l2.pred <- sqrt(drop(colSums(x^2)- n*xbar^2)) ##
-  if (any(l2.pred < zero)) {
-    warning("A predictor has no signal: you should remove it.")
-    norm[abs(l2.pred) < zero] <- 1 ## dirty way to handle 0/0
-  }
   if (normalize) {
+    normx <- sqrt(drop(colSums(x^2)- n*xbar^2))
+    if (any(normx < zero)) {
+      warning("A predictor has no signal: you should remove it.")
+      normx[abs(normx) < zero] <- 1 ## dirty way to handle 0/0
+    }
     ## xbar is scaled to handle internaly the centering of X for
     ## sparsity purpose
-    normx <- l2.pred
     xbar <- xbar/normx
   } else {
     normx <- rep(1,p)
@@ -718,16 +728,13 @@ standardize <- function(x,y,intercept,normalize,penscale,zero=.Machine$double.ep
     xbar <- xbar/penscale
   }
   ## Building the sparsely encoded design matrix
+  xty   <- drop(crossprod(y-ybar,scale(x,xbar,FALSE)))
   if (inherits(x, "sparseMatrix")) {
-    xs    <- as(x, "dgCMatrix")
-    x     <- list(Xi = xs@i, Xj = xs@p, Xnp = diff(xs@p), Xx = xs@x)
-    xty   <- drop(crossprod(y-ybar,scale(xs,xbar,FALSE)))
+    x     <- list(Xi = x@i, Xj = x@p, Xnp = diff(x@p), Xx = x@x)
   } else {
-    x     <- list(Xx = as.matrix(x))
-    xty   <- drop(crossprod(y-ybar,scale(x$Xx,xbar,FALSE)))
+    x     <- as.matrix(x)
   }
-
-  return(list(xbar=xbar, ybar=ybar, normx=normx, normy=normy, xty=xty, x=x, l2.pred=l2.pred))
+  return(list(xbar=xbar, ybar=ybar, normx=normx, normy=normy, xty=xty, x=x))
 }
 
 ## ======================================================

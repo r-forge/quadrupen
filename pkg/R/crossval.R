@@ -233,6 +233,7 @@ simple.cv <- function(folds, x, y, args, lambda2, mc.cores) {
 default.args <- function(penalty,n,p,user) {
   lambda2 <- ifelse(is.null(user$lambda2),0.01,user$lambda2)
   return(list(
+    beta0     = NULL,
     lambda1   = NULL,
     lambda2   = 0.01,
     penalty   = penalty,

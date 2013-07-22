@@ -8,7 +8,7 @@
     nlambda1 = ifelse(is.null(lambda1), 100, length(lambda1)),
     min.ratio = ifelse(n <= p, 0.01, 1e-04),
     max.feat = ifelse(lambda2 < 0.01, min(n, p), min(4 * n, p)),
-    control = list(), checkargs = TRUE)
+    beta0 = NULL, control = list(), checkargs = TRUE)
 }
 \arguments{
   \item{x}{matrix of features, possibly sparsely encoded
@@ -74,6 +74,10 @@
   \code{lambda2} (<0.01) and \code{min(4*nrow(x),ncol(x))}
   otherwise. Use with care, as it considerably changes the
   computation time.}
+
+  \item{beta0}{a starting point for the vector of
+  parameter. When \code{NULL} (the default), will be
+  initialized at zero. May save time in some situation.}
 
   \item{control}{list of argument controlling low level
   options of the algorithm --use with care and at your own
