@@ -20,6 +20,7 @@ int quadra_enet(vec &x0,
 
   // Solving the quadratic problem
   vec x1 = solve(trimatu(R), solve( trimatl(strans(R)), xty - pen * theta));
+  // vec x1 = cg(xAtxA, xty - pen*theta, x0) ;
 
   // Check for swapping variables
   uvec swap = find(abs(signs(x1.elem(A)) - theta.elem(A)) > ZERO);
@@ -192,4 +193,3 @@ uvec setdiff(uvec x, uvec y) {
   }
   return(z);
 }
-

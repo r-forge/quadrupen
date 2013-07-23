@@ -8,7 +8,7 @@
 #ifndef _RCPP_ARMA_H
 #define _RCPP_ARMA_H
 #include <RcppArmadillo.h>
-#endif 
+#endif
 
 using namespace Rcpp;
 using namespace arma;
@@ -24,4 +24,5 @@ inline vec signs(vec x) {
   return(signs);
 }
 sp_mat convertSparse(S4 mat) ;
-#endif 
+vec cg(mat A, vec b, vec x) ;
+#endif
