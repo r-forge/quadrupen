@@ -6,6 +6,7 @@
 
 int quadra_enet(vec &x0,
 		mat &R,
+		mat &xAtxA,
 		vec  xty,
 		vec  sgn_grd,
 		double &pen ,
@@ -48,7 +49,7 @@ int quadra_enet(vec &x0,
     iter++;
 
     // This is the gradient on the active part of the parameters
-    vec grd = -xty + strans(R) * R * x2;
+    vec grd = -xty + xAtxA * x2;
     // if the sign is coherent, keep that one...
     if (fabs(grd(null[0]) + pen * sign(x2(null[0]))) <= ZERO) {
       null = swap; // this is empty

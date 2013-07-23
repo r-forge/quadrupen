@@ -166,7 +166,7 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA
 	break;
       default:
 	try {
-	  it_optim[nbr_opt] = quadra_enet(betaA, R, xty.elem(A), signs(grd.elem(A)), lambda1[m], null);
+	  it_optim[nbr_opt] = quadra_enet(betaA, R, xAtxA, xty.elem(A), signs(grd.elem(A)), lambda1[m], null);
 	} catch (std::runtime_error &error) {
 	  if (verbose > 0) {
 	    Rprintf("\nWarning: singular system at this stage of the solution path, cutting here.\n");
