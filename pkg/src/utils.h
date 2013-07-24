@@ -24,5 +24,6 @@ inline vec signs(vec x) {
   return(signs);
 }
 sp_mat convertSparse(S4 mat) ;
-vec cg(mat A, vec b, vec x) ;
+vec  cg(mat A, vec b, vec x, double tol) ;
+vec pcg(mat A, mat P, vec b, vec x, double tol) ;
 #endif

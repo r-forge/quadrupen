@@ -36,27 +36,61 @@ sp_mat convertSparse(S4 mat) {
   return(res);
 }
 
-vec cg(mat A, vec b, vec x) {
+vec cg(mat A, vec b, vec x, double tol) {
+
   vec r = b - A * x;
   vec p = r ;
-  double rs_old = dot(r,r) ;
+  double rs_old = sum(square(r)) ;
+  
   double rs_new = rs_old ;
   int i = 0;
   double alpha ;
-
-  double tol = 1e-6;
   mat Ap ;
 
-  while (sqrt(rs_new) > tol & i < 1e2) {
+  while (sqrt(rs_new) > tol & i < 1e3) {
     Ap = A * p;
     alpha = rs_old/dot(p,Ap) ;
     x += alpha * p ;
     r -= alpha * Ap ;
-    rs_new = dot(r,r);
+    // Polak-Ribière update
+    rs_new = dot(r,-alpha * Ap);
     p = r + rs_new/rs_old*p;
     rs_old = rs_new;
     i++;
   }
+  
+  // Rprintf("\n nb of iterate %d",i);
+  return(x);
+}
 
+// Can't find a reasonable Preconditioner that does not
+// require a computational burden equivalent to a Cholesky decomposition
+vec pcg(mat A, mat P, vec b, vec x, double tol) {
+
+  vec r = b - A * x;
+  vec z = P * r;
+  vec p = z ;
+  //double rs_old = sum(square(r)) ;
+  double rs_old = dot(r,z) ;
+  
+  double rs_new = rs_old ;
+  int i = 0;
+  double alpha ;
+  mat Ap ;
+
+  while (sqrt(rs_new) > tol & i < 1e3) {
+    Ap = A * p;
+    alpha = rs_old/dot(p,Ap) ;
+    x += alpha * p ;
+    r -= alpha * Ap ;
+    // Polak-Ribière update
+    z = P * r ;
+    rs_new = dot(z,-alpha * Ap);
+    p = z + rs_new/rs_old*p;
+    rs_old = rs_new;
+    i++;
+  }
+  
+  // Rprintf("\n nb of iterate %d",i);
   return(x);
 }

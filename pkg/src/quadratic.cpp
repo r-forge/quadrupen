@@ -10,18 +10,24 @@ int quadra_enet(vec &x0,
 		vec  xty,
 		vec  sgn_grd,
 		double &pen ,
-		uvec   &null) {
+		uvec   &null,
+		bool   usechol,
+		double tol) {
 
   uword iter = 1; // current iterate
-
+  
   uvec A = find(abs(x0) > ZERO) ; // vector of active variables
   vec theta = -sgn_grd   ; // vector of sign of the solution
   theta.elem(A)   = signs(x0.elem(A));
-
+  
   // Solving the quadratic problem
-  vec x1 = solve(trimatu(R), solve( trimatl(strans(R)), xty - pen * theta));
-  // vec x1 = cg(xAtxA, xty - pen*theta, x0) ;
-
+  vec x1 ;
+  if (usechol) {
+    x1 = solve(trimatu(R), solve( trimatl(strans(R)), xty - pen * theta));
+  } else {
+    x1 = cg(xAtxA, xty - pen*theta, x0, tol) ;
+  }
+  
   // Check for swapping variables
   uvec swap = find(abs(signs(x1.elem(A)) - theta.elem(A)) > ZERO);
   if (swap.is_empty()) {
@@ -46,7 +52,12 @@ int quadra_enet(vec &x0,
     theta = -sgn_grd        ; // vector of sign of the solution
     theta.elem(A)   = signs(x0.elem(A));
 
-    vec x2 = solve(trimatu(R), solve( trimatl(strans(R)), xty - pen * theta));
+    vec x2 ;
+    if (usechol) {
+      x2 = solve(trimatu(R), solve( trimatl(strans(R)), xty - pen * theta));
+    } else {
+      x2 = cg(xAtxA, xty - pen*theta, x1, tol) ;
+    }
     iter++;
 
     // This is the gradient on the active part of the parameters

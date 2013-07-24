@@ -8,22 +8,20 @@ test_that("testing warm start", {
     lambda1 <- .25
     
     enet.ref <- elastic.net(x,y,lambda1=lambda1, control=list(timer=TRUE))
-
     enet.ref.bot <- elastic.net(x,y,lambda1=lambda1*2)
-    enet.ref.up  <- elastic.net(x,y,lambda1=lambda1/2)
 
-    enet.bot <- elastic.net(x,y,lambda1=lambda1, beta0 = enet.ref.bot@coefficients, control=list(timer=TRUE,usechol=FALSE,threshold=1e-3))
-    enet.up  <- elastic.net(x,y,lambda1=lambda1, beta0 = enet.ref.up@coefficients , control=list(timer=TRUE,usechol=FALSE,threshold=1e-3))
-
+    enet.cg  <- elastic.net(x,y,lambda1=lambda1, control=list(timer=TRUE,usechol=FALSE,threshold=1e-3))
+    enet.cg.warm <- elastic.net(x,y,lambda1=lambda1, beta0 = enet.ref.bot@coefficients, control=list(timer=TRUE,usechol=FALSE,threshold=1e-3))
+    
     cat("\nTimings with warm-restart along the path")
-    cat("\n\tfrom stratch: ",enet.ref@monitoring$external.timer)
-    cat("\n\tstarting from sparser solution: ",enet.bot@monitoring$external.timer)
-    cat("\n\tstarting from more dense solution: ",enet.up@monitoring$external.timer)
+    cat("\n\tfrom stratch (cholesky): ",enet.ref@monitoring$internal.timer)
+    cat("\n\tfrom stratch (conjugate-gradient): ",enet.cg@monitoring$internal.timer)
+    cat("\n\tCG starting from sparser solution: ",enet.cg.warm@monitoring$internal.timer)
         
     return(list(
       coef.ref=as.matrix(enet.ref@coefficients),
-      coef.bot=as.matrix(enet.bot@coefficients),
-      coef.up =as.matrix(enet.up@coefficients)))
+      coef.cg.warm=as.matrix(enet.cg.warm@coefficients),
+      coef.cg =as.matrix(enet.cg@coefficients)))
   }
   
   ## PROSTATE DATA SET
@@ -33,8 +31,8 @@ test_that("testing warm start", {
 
   ## Run the tests...
   out <-get.coef(x,y)
-  expect_that(out$coef.bot,is_equivalent_to(out$coef.ref))
-  expect_that(out$coef.up ,is_equivalent_to(out$coef.ref))
+  expect_that(out$coef.cg.warm,is_equivalent_to(out$coef.ref))
+  expect_that(out$coef.cg ,is_equivalent_to(out$coef.ref))
 
   ## RANDOM DATA
   seed <- sample(1:10000,1)
@@ -55,8 +53,8 @@ test_that("testing warm start", {
 
   ## Run the tests...
   out <-get.coef(x,y)
-  expect_that(out$coef.bot,is_equivalent_to(out$coef.ref))
-  expect_that(out$coef.up ,is_equivalent_to(out$coef.ref))
+  expect_that(out$coef.cg.warm,is_equivalent_to(out$coef.ref))
+  expect_that(out$coef.cg ,is_equivalent_to(out$coef.ref))
   
 })
 

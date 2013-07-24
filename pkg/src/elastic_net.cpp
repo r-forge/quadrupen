@@ -8,7 +8,7 @@
 using namespace Rcpp;
 using namespace arma;
 
-SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA2, SEXP XBAR, SEXP NORMX, SEXP NORMY, SEXP WEIGHTS, SEXP NAIVE, SEXP EPS, SEXP MAXITER, SEXP MAXFEAT, SEXP FUN, SEXP VERBOSE, SEXP SPARSE, SEXP MONITOR) {
+SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA2, SEXP XBAR, SEXP NORMX, SEXP NORMY, SEXP WEIGHTS, SEXP NAIVE, SEXP EPS, SEXP MAXITER, SEXP MAXFEAT, SEXP FUN, SEXP VERBOSE, SEXP SPARSE, SEXP USECHOL, SEXP MONITOR) {
 
   // disable messages being printed to the err2 stream
   std::ostream nullstream(0);
@@ -22,6 +22,7 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA
   vec    weights  = as<vec>    (WEIGHTS)   ; // norm of the predictors
   double normy    = as<double> (NORMY)     ; // norm of the predictors
   bool   naive    = as<bool>   (NAIVE)     ; // naive elastic-net or not
+  bool   usechol  = as<bool>   (USECHOL)   ; // use cholesky decomposition or not
   vec    xty      = as<vec>    (XTY)       ; // reponses to predictors vector
   double eps      = as<double> (EPS)       ; // precision required
   uword  fun      = as<int>    (FUN)       ; // solver (0=quadra, 1=pathwise, 2=fista)
@@ -93,14 +94,16 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA
     A = find(beta0 != 0) ;
     betaA = beta0.elem(A) ;
     xtxA = trans(x) * x.cols(A) ;
-    for (int i=0; i<A.n_elem;i++) {
-      xtxA.col(i) = xtxA.col(i) + spS.col(A(i));
-      are_in(A(i)) = 1;
+    if (lambda2 > 0) {
+      for (int i=0; i<A.n_elem;i++) {
+	xtxA.col(i) = xtxA.col(i) + spS.col(A(i));
+	are_in(A(i)) = 1;
+      }
     }
     grd += xtxA * betaA    ;
     nbr_in = A.n_elem;
     xAtxA = xtxA.rows(A)   ;
-    if (fun == 0) {
+    if (fun == 0 & usechol) {
       R = chol(xAtxA) ;
     }
     if (fun == 1) {
@@ -142,7 +145,7 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA
 
       // Check if the variable is already in the active set
       if (are_in[var_in] == 0) {
-	add_var_enet(n, nbr_in, var_in, betaA, A, x, xtxA, xAtxA, xtxw, R, lambda2, xbar, Xx, Xi, Xp, Xnp, j_nz, spS, sparse, fun) ;
+	add_var_enet(n, nbr_in, var_in, betaA, A, x, xtxA, xAtxA, xtxw, R, lambda2, xbar, Xx, Xi, Xp, Xnp, j_nz, spS, sparse, usechol, fun) ;
 	if (verbose == 2) {Rprintf("newly added variable %i\n",var_in);}
 	are_in[var_in] = 1;
 	nbr_in++;
@@ -166,7 +169,7 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA
 	break;
       default:
 	try {
-	  it_optim[nbr_opt] = quadra_enet(betaA, R, xAtxA, xty.elem(A), signs(grd.elem(A)), lambda1[m], null);
+	  it_optim[nbr_opt] = quadra_enet(betaA, R, xAtxA, xty.elem(A), signs(grd.elem(A)), lambda1[m], null, usechol, eps);
 	} catch (std::runtime_error &error) {
 	  if (verbose > 0) {
 	    Rprintf("\nWarning: singular system at this stage of the solution path, cutting here.\n");
@@ -188,7 +191,7 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA
 	if (verbose == 2) {
 	  for (int j=0; j<null.n_elem; j++) {Rprintf("removing variable %i\n",null[j]);}
 	}
-	remove_var_enet(nbr_in,are_in,betaA,A,xtxA,xAtxA,xtxw,R,null,fun) ;
+	remove_var_enet(nbr_in,are_in,betaA,A,xtxA,xAtxA,xtxw,R,null,usechol,fun) ;
       }
 
       // _____________________________________________________________
@@ -322,7 +325,7 @@ void choldowndate(mat &R, int j) {
 }
 
 void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat &x, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, 
-		  double &lambda2, vec &xbar, vec &Xx, uvec &Xi, uvec &Xp, uvec &Xnp, uvec &j_nz, sp_mat &spS, bool &sparse, uword &fun) {
+		  double &lambda2, vec &xbar, vec &Xx, uvec &Xi, uvec &Xp, uvec &Xnp, uvec &j_nz, sp_mat &spS, bool &sparse, bool &usechol, uword &fun) {
   
   vec  new_col   ; // column currently added to xtxA
   vec  col_Vx    ;
@@ -365,18 +368,18 @@ void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat
   }
   xtxA  = join_rows(xtxA, new_col) ;
   xAtxA = join_rows(xAtxA, trans(xtxA.row(var_in))) ;    
-
-  if (fun == 0) {
+  
+  if (fun == 0 & usechol == 1) {
     cholupdate(R, xAtxA) ;
   }
-
+  
   if (fun == 1) {
     xtxw.resize(nbr_in+1) ;
     xtxw(nbr_in) = dot(xAtxA.col(nbr_in),betaA);
   }
 }
 
-void remove_var_enet(int &nbr_in, uvec &are_in, vec &betaA, uvec &A, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, uvec &null, uword &fun) {
+void remove_var_enet(int &nbr_in, uvec &are_in, vec &betaA, uvec &A, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, uvec &null, bool &usechol, uword &fun) {
   
   for (int j=0; j<null.n_elem; j++) {
     are_in[A(null[j])]  = 0 ;
@@ -388,7 +391,7 @@ void remove_var_enet(int &nbr_in, uvec &are_in, vec &betaA, uvec &A, mat &xtxA, 
     xtxA.shed_col(null[j])  ;
     xAtxA.shed_col(null[j]) ;
     xAtxA.shed_row(null[j]) ;
-    if (fun == 0) {
+    if (fun == 0 & usechol == 1) {
       choldowndate(R, null[j]) ;
     }
     nbr_in--;

@@ -532,7 +532,8 @@ quadrupen <- function(beta0    ,
                method       = "quadra",
                threshold    = ifelse(quadra, 1e-7, 1e-2),
                monitor      = 0,
-               bulletproof  = TRUE)
+               bulletproof  = TRUE,
+               usechol      = TRUE)
   ctrl[names(control)] <- control # overwritten by user specifications
   if (ctrl$timer) {r.start <- proc.time()}
 
@@ -589,6 +590,7 @@ quadrupen <- function(beta0    ,
                         fista    = 2, 0),
                  ctrl$verbose,
                  inherits(x, "sparseMatrix"),
+                 ctrl$usechol,
                  ctrl$monitor,
                  package = "quadrupen")
     coefficients <- sparseMatrix(i = out$iA+1,
