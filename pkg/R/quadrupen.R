@@ -188,6 +188,8 @@ elastic.net <- function(x,
   p <- ncol(x) # problem size
   n <- nrow(x) # sample size
   if (checkargs) {
+    if (is.data.frame(x))
+      x <- as.matrix(x)
     if(!inherits(x, c("matrix", "Matrix")))
       stop("x has to be of class 'matrix', 'dgeMatrix' or 'dgCMatrix'.")
     if(any(is.na(x)))
@@ -219,6 +221,8 @@ elastic.net <- function(x,
         stop("struct must be a (square) positive semidefinite matrix.")
       if (any(eigen(struct,only.values=TRUE)$values<0))
         stop("struct must be a (square) positive semidefinite matrix.")
+      if(!inherits(struct, "dgCMatrix"))
+        struct <- as(struct, "dgCMatrix")
     }
     if (!is.null(beta0)) {
       beta0 <- as.numeric(beta0)
@@ -446,6 +450,8 @@ bounded.reg <- function(x,
   p <- ncol(x) # problem size
   n <- nrow(x) # sample size
   if (checkargs) {
+    if (is.data.frame(x))
+      x <- as.matrix(x)
     if(!inherits(x, c("matrix", "Matrix")))
       stop("x has to be of class 'matrix', 'dgeMatrix' or 'dgCMatrix'.")
     if(any(is.na(x)))
@@ -474,7 +480,9 @@ bounded.reg <- function(x,
       if (ncol(struct) != p | ncol(struct) != p)
         stop("struct must be a (square) positive definite matrix.")
       if (any(eigen(struct,only.values=TRUE)$values<=.Machine$double.eps))
-        stop("struct must be a (square) positive definite matrix.")
+        stop("struct must be a (square) positive definite matrix.")      
+      if(!inherits(struct, "dgCMatrix"))
+        struct <- as(struct, "dgCMatrix")
     }
     if (length(max.feat)>1)
       stop("max.feat must be an integer.")
@@ -553,14 +561,12 @@ quadrupen <- function(beta0    ,
   ## STRUCTURATING MATRIX
   if (is.null(struct)) {
     struct <- sparseMatrix(i=1:p,j=1:p,x=rep(1,p))
-  } else {
-    struct <- as(struct,"dgCMatrix")
   }
   if (lambda2 > 0) {
     ## renormalize the l2 structuring matrix according to the l1
     ## penscale values, so as it does not interfer with the l2 penalty.
     D <- Diagonal(x=sqrt(lambda2)/penscale)
-    S <- as(D %*% struct %*% D, "dgCMatrix")
+    S <- D %*% struct %*% D
   } else {
     S <- Matrix(0,p,p)
   }
@@ -714,6 +720,8 @@ standardize <- function(x,y,intercept,normalize,penscale,zero=.Machine$double.ep
       warning("A predictor has no signal: you should remove it.")
       normx[abs(normx) < zero] <- 1 ## dirty way to handle 0/0
     }
+    ## normalizing the predictors...
+    x <- sweep(x, 2L, normx, "/", check.margin = FALSE)
     ## xbar is scaled to handle internaly the centering of X for
     ## sparsity purpose
     xbar <- xbar/normx
@@ -722,19 +730,20 @@ standardize <- function(x,y,intercept,normalize,penscale,zero=.Machine$double.ep
   }
   normy <- sqrt(sum(y^2))
 
-  ## normalizing the predictors...
-  x <- sweep(x, 2L, normx, "/", check.margin = FALSE)
   ## and now normalize predictors according to penscale value
   if (any(penscale != 1)) {
     x <- sweep(x, 2L, penscale, "/", check.margin=FALSE)
     xbar <- xbar/penscale
   }
-  ## Building the sparsely encoded design matrix
-  xty   <- drop(crossprod(y-ybar,scale(x,xbar,FALSE)))
+  ## Computuping marginal correlation
+  if (intercept) {
+    xty   <- drop(crossprod(y-ybar,sweep(x,2L,xbar)))
+  } else {
+    xty   <- drop(crossprod(y,x))
+  }
+  ## Building the sparsely encoded design/data matrix
   if (inherits(x, "sparseMatrix")) {
     x     <- list(Xi = x@i, Xj = x@p, Xnp = diff(x@p), Xx = x@x)
-  } else {
-    x     <- as.matrix(x)
   }
   return(list(xbar=xbar, ybar=ybar, normx=normx, normy=normy, xty=xty, x=x))
 }

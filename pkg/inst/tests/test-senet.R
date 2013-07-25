@@ -1,6 +1,6 @@
-context("Consistency of the Elastic-net solution path")
+context("Consistency of the Structured Elastic-net solution path")
 
-test_that("Consistency between of the structured elastic-net", {
+test_that("Consistency of the structured elastic-net", {
 
   require(elasticnet)
 

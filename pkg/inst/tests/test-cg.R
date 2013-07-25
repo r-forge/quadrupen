@@ -1,4 +1,4 @@
-context("Consistency of the Elastic-net solution path")
+context("Testing consistency and timings of conjugate gradient algorithm")
 
 test_that("testing warm start", {
 
@@ -31,8 +31,8 @@ test_that("testing warm start", {
 
   ## Run the tests...
   out <-get.coef(x,y)
-  expect_that(out$coef.cg.warm,is_equivalent_to(out$coef.ref))
-  expect_that(out$coef.cg ,is_equivalent_to(out$coef.ref))
+  expect_equal(out$coef.cg.warm,out$coef.ref,tolerance=1e-3)
+  expect_equal(out$coef.cg ,out$coef.ref    ,tolerance=1e-3)
 
   ## RANDOM DATA
   seed <- sample(1:10000,1)
@@ -53,8 +53,8 @@ test_that("testing warm start", {
 
   ## Run the tests...
   out <-get.coef(x,y)
-  expect_that(out$coef.cg.warm,is_equivalent_to(out$coef.ref))
-  expect_that(out$coef.cg ,is_equivalent_to(out$coef.ref))
+  expect_equal(out$coef.cg.warm,out$coef.ref,tolerance=1e-3)
+  expect_equal(out$coef.cg     ,out$coef.ref,tolerance=1e-3)
   
 })
 

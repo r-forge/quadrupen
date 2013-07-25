@@ -1,6 +1,6 @@
-context("Consistency of the Elastic-net solution path")
+context("Testing consistency and timings of warm restart")
 
-test_that("testing warm start", {
+test_that("Warm restart", {
 
   require(quadrupen)
   
@@ -12,8 +12,8 @@ test_that("testing warm start", {
     enet.ref.bot <- elastic.net(x,y,lambda1=lambda1*2)
     enet.ref.up  <- elastic.net(x,y,lambda1=lambda1/2)
 
-    enet.bot <- elastic.net(x,y,lambda1=lambda1, beta0 = enet.ref.bot@coefficients, control=list(timer=TRUE,usechol=FALSE,threshold=1e-3))
-    enet.up  <- elastic.net(x,y,lambda1=lambda1, beta0 = enet.ref.up@coefficients , control=list(timer=TRUE,usechol=FALSE,threshold=1e-3))
+    enet.bot <- elastic.net(x,y,lambda1=lambda1, beta0 = enet.ref.bot@coefficients, control=list(timer=TRUE))
+    enet.up  <- elastic.net(x,y,lambda1=lambda1, beta0 = enet.ref.up@coefficients , control=list(timer=TRUE))
 
     cat("\nTimings with warm-restart along the path")
     cat("\n\tfrom stratch: ",enet.ref@monitoring$external.timer)
