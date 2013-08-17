@@ -69,7 +69,7 @@
 ##' @param beta0 a starting point for the vector of parameter. When
 ##' \code{NULL} (the default), will be initialized at zero. May save
 ##' time in some situation.
-##' 
+##'
 ##' @param control list of argument controlling low level options of
 ##' the algorithm --use with care and at your own risk-- :
 ##' \itemize{%
@@ -452,8 +452,8 @@ bounded.reg <- function(x,
   if (checkargs) {
     if (is.data.frame(x))
       x <- as.matrix(x)
-    if(!inherits(x, c("matrix", "Matrix")))
-      stop("x has to be of class 'matrix', 'dgeMatrix' or 'dgCMatrix'.")
+    if(!inherits(x, c("matrix", "dgCMatrix")))
+      stop("x has to be of class 'matrix' or 'dgCMatrix'.")
     if(any(is.na(x)))
       stop("NA value in x not allowed.")
     if(!is.numeric(y))
@@ -480,7 +480,7 @@ bounded.reg <- function(x,
       if (ncol(struct) != p | ncol(struct) != p)
         stop("struct must be a (square) positive definite matrix.")
       if (any(eigen(struct,only.values=TRUE)$values<=.Machine$double.eps))
-        stop("struct must be a (square) positive definite matrix.")      
+        stop("struct must be a (square) positive definite matrix.")
       if(!inherits(struct, "dgCMatrix"))
         struct <- as(struct, "dgCMatrix")
     }
@@ -741,10 +741,7 @@ standardize <- function(x,y,intercept,normalize,penscale,zero=.Machine$double.ep
   } else {
     xty   <- drop(crossprod(y,x))
   }
-  ## Building the sparsely encoded design/data matrix
-  if (inherits(x, "sparseMatrix")) {
-    x     <- list(Xi = x@i, Xj = x@p, Xnp = diff(x@p), Xx = x@x)
-  }
+
   return(list(xbar=xbar, ybar=ybar, normx=normx, normy=normy, xty=xty, x=x))
 }
 

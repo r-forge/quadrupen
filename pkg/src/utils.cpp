@@ -3,37 +3,87 @@
 using namespace Rcpp;
 using namespace arma;
 
-// from Rcpp Gallery -- Dirk Eddelbuettel — Dec 25, 2012
-sp_mat convertSparse(S4 mat) {
-  IntegerVector dims = mat.slot("Dim");
-  IntegerVector i = mat.slot("i");
-  IntegerVector p = mat.slot("p");
-  NumericVector x = mat.slot("x");
+void standardize_dense(mat &x, vec &y, bool &intercept, bool &normalize, vec &weights,
+		       vec &xty, rowvec &normx, double &normy, rowvec &xbar, double &ybar) {
 
-  int nrow = dims[0], ncol = dims[1];
-  arma::sp_mat res(nrow, ncol);
+  // uword n = x.n_rows;
+  // uword p = x.n_cols;
 
-  // create space for values, and copy
-  arma::access::rw(res.values) = arma::memory::acquire_chunked<double>(x.size() + 1);
-  arma::arrayops::copy(arma::access::rwp(res.values), x.begin(), x.size() + 1);
+  // mat meanx ;
+  // mat xnorm ;
 
-  // create space for row_indices, and copy -- so far in a lame loop
-  arma::access::rw(res.row_indices) = arma::memory::acquire_chunked<arma::uword>(x.size() + 1);
-  for (int j=0; j<i.size(); j++)
-    arma::access::rwp(res.row_indices)[j] = i[j];
+  // if (intercept == 1) {
+  //   meanx = mean(x, 0);
+  //   ybar = mean(y) ;
+  // } else {
+  //   meanx = zeros(p) ;
+  //   ybar = 0;
+  // }
 
-  // create space for col_ptrs, and copy -- so far in a lame loop
-  arma::access::rw(res.col_ptrs) = arma::memory::acquire<arma::uword>(p.size() + 2);
-  for (int j=0; j<p.size(); j++)
-    arma::access::rwp(res.col_ptrs)[j] = p[j];
+  // if (normalize == 1) {
+  //   xnorm = sqrt(sum(square(x),0) - n * square(meanx));
+  //   x = x * diagmat(pow(xnorm,-1)) ;
+  //   meanx = meanx/xnorm ;
+  // } else {
+  //   xnorm = ones(p, 1);
+  // }
+  // normy = sqrt(sum(square(y))) ;
 
-  // important: set the sentinel as well
-  arma::access::rwp(res.col_ptrs)[p.size()+1] = std::numeric_limits<arma::uword>::max();
+  // if (any(weights != 1)) {
+  //   x = x * diagmat(pow(weights,-1));
+  //   meanx = meanx/weights;
+  // }
 
-  // set the number of non-zero elements
-  arma::access::rw(res.n_nonzero) = x.size();
+  // if (intercept == 1) {
+  //   xty = trans(x-ones(n,1) * meanx) * (y-ybar) ;
+  // } else {
+  //   xty = trans(x) * y;
+  // }
 
-  return(res);
+  // xbar = as<vec>(meanx);
+  // normx = trans(xnorm);
+
+}
+
+void standardize_sparse(sp_mat &x, vec &y, bool &intercept, bool &normalize, vec &weights,
+			vec &xty, rowvec &normx, double &normy, rowvec &xbar, double &ybar) {
+
+  // uword n = x.n_rows;
+  // uword p = x.n_cols;
+
+  // rowvec meanx ;
+  // rowvec xnorm ;
+
+  // if (intercept == 1) {
+  //   meanx = mean(x, 0);
+  //   ybar = mean(y) ;
+  // } else {
+  //   meanx = zeros(p) ;
+  //   ybar = 0;
+  // }
+
+  // if (normalize == 1) {
+  //   xnorm = sqrt(sum(square(x),0) - n * square(meanx));
+  //   x = x * diagmat(pow(xnorm,-1)) ;
+  //   meanx = meanx/xnorm ;
+  // } else {
+  //   xnorm = ones(p, 1);
+  // }
+  // normy = sqrt(sum(square(y))) ;
+
+  // if (any(weights != 1)) {
+  //   x = x * diagmat(pow(weights,-1));
+  //   meanx = meanx/weights;
+  // }
+
+  // if (intercept == 1) {
+  //   xty = trans(x-ones(n,1) * meanx) * (y-ybar) ;
+  // } else {
+  //   xty = trans(x) * y;
+  // }
+
+  // xbar = trans(meanx);
+  // normx = trans(xnorm);
 }
 
 vec cg(mat A, vec b, vec x, double tol) {
@@ -41,7 +91,7 @@ vec cg(mat A, vec b, vec x, double tol) {
   vec r = b - A * x;
   vec p = r ;
   double rs_old = sum(square(r)) ;
-  
+
   double rs_new = rs_old ;
   int i = 0;
   double alpha ;
@@ -58,7 +108,7 @@ vec cg(mat A, vec b, vec x, double tol) {
     rs_old = rs_new;
     i++;
   }
-  
+
   // Rprintf("\n nb of iterate %d",i);
   return(x);
 }
@@ -72,7 +122,7 @@ vec pcg(mat A, mat P, vec b, vec x, double tol) {
   vec p = z ;
   //double rs_old = sum(square(r)) ;
   double rs_old = dot(r,z) ;
-  
+
   double rs_new = rs_old ;
   int i = 0;
   double alpha ;
@@ -90,7 +140,7 @@ vec pcg(mat A, mat P, vec b, vec x, double tol) {
     rs_old = rs_new;
     i++;
   }
-  
+
   // Rprintf("\n nb of iterate %d",i);
   return(x);
 }
