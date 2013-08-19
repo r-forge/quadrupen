@@ -26,9 +26,9 @@ inline vec signs(vec x) {
 vec  cg(mat A, vec b, vec x, double tol) ;
 vec pcg(mat A, mat P, vec b, vec x, double tol) ;
 
-void standardize_dense(mat &x, vec &y, bool &intercept, bool &normalize, vec &weights,
+void standardize(mat &x, vec &y, bool &intercept, bool &normalize, vec &weights,
 		       vec &xty, vec &normx, double &normy, vec &xbar, double &ybar) ;
-void standardize_sparse(sp_mat &x, vec &y, bool &intercept, bool &normalize, vec &weights,
+void standardize(sp_mat &x, vec &y, bool &intercept, bool &normalize, vec &weights,
 			vec &xty, vec &normx, double &normy, vec &xbar, double &ybar) ;
 #endif
 

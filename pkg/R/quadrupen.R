@@ -234,7 +234,7 @@ elastic.net <- function(x,
     if(is.numeric(max.feat) & !is.integer(max.feat))
       max.feat <- as.integer(max.feat)
   }
-
+  
   return(quadrupen(beta0 = beta0,
                    x=x,
                    y=y,
@@ -548,14 +548,15 @@ quadrupen <- function(beta0    ,
   get.lambda1 <- switch(penalty,
                         "elastic.net" = get.lambda1.l1,
                         "bounded.reg" = get.lambda1.li)
+
   ## ======================================================
   ## INTERCEPT AND NORMALIZATION TREATMENT
-  input <- standardize(x,y,intercept,normalize,penscale)
+  ##   input <- standardize(x,y,intercept,normalize,penscale)
 
   ## ======================================================
   ## GENERATE A GRID OF PENALTY IF NONE HAS BEEN PROVIDED
-  if (is.null(lambda1))
-    lambda1 <- get.lambda1(input$xty,nlambda1,min.ratio)
+  ##  if (is.null(lambda1))
+  ##    lambda1 <- get.lambda1(input$xty,nlambda1,min.ratio)
 
   ## ======================================================
   ## STRUCTURATING MATRIX
@@ -577,14 +578,15 @@ quadrupen <- function(beta0    ,
   if (penalty == "elastic.net") {
     out <- .Call("elastic_net",
                  beta0        ,
-                 input$x      ,
-                 input$xty    ,
+                 x            ,
+                 y            ,
                  S            ,
                  lambda1      ,
+                 nlambda1     ,
+                 min.ratio    ,
                  lambda2      ,
-                 input$xbar   ,
-                 input$normx  ,
-                 input$normy  ,
+                 intercept    ,
+                 normalize    ,
                  rep(1,n)     ,
                  naive        ,
                  ctrl$thresh  ,
@@ -660,16 +662,17 @@ quadrupen <- function(beta0    ,
   dim.names <- list()
   dimnames(coefficients)[[1]] <- round(c(out$lambda1),3)
   dimnames(coefficients)[[2]] <- 1:p
-
+  meanx <- drop(out$meanx)
+  normx <- drop(out$normx)
+  
   ## Renormalize according to the first penalty scale
   if (any(penscale != 1)) {
     coefficients <- sweep(coefficients, 2L, penscale,"/",check.margin=FALSE)
   }
 
   ## FITTED VALUES AND RESIDUALS...
-  meanx <- input$xbar*input$normx*penscale
   if (intercept) {
-    mu <- as.vector(input$ybar-coefficients %*% (input$xbar*penscale))
+    mu <- as.vector(mean(y)-coefficients %*% (meanx/normx))
     fitted <- sweep(x %*% t(coefficients),2L,-mu,check.margin=FALSE)
   } else {
     mu <- 0
@@ -684,7 +687,7 @@ quadrupen <- function(beta0    ,
              intercept    = intercept      ,
              mu           = mu             ,
              meanx        = meanx          ,
-             normx        = input$normx    ,
+             normx        = normx          ,
              fitted       = fitted         ,
              residuals    = residuals      ,
              penscale     = penscale       ,

@@ -3,87 +3,88 @@
 using namespace Rcpp;
 using namespace arma;
 
-void standardize_dense(mat &x, vec &y, bool &intercept, bool &normalize, vec &weights,
-		       vec &xty, rowvec &normx, double &normy, rowvec &xbar, double &ybar) {
+void standardize(mat &x, vec &y, bool &intercept, bool &normalize, vec &weights,
+		 vec &xty, vec &normx, double &normy, vec &xbar, double &ybar) {
 
-  // uword n = x.n_rows;
-  // uword p = x.n_cols;
+  uword n = x.n_rows;
+  uword p = x.n_cols;
 
-  // mat meanx ;
-  // mat xnorm ;
+  if (intercept == 1) {
+    xbar = trans(rowvec(mean(x, 0)));
+    ybar = mean(y) ;
+  } else {
+    xbar = zeros(p) ;
+    ybar = 0;
+  }
 
-  // if (intercept == 1) {
-  //   meanx = mean(x, 0);
-  //   ybar = mean(y) ;
-  // } else {
-  //   meanx = zeros(p) ;
-  //   ybar = 0;
-  // }
+  if (normalize == 1) {
+    normx = sqrt(trans(sum(square(x),0)) - n * square(xbar));
+    for (int i=0; i<p; i++) {
+      x.col(i) /= normx(i);
+    }
+    xbar /= normx ;
+  } else {
+    normx = ones(p);
+  }
+  normy = sqrt(sum(square(y))) ;
 
-  // if (normalize == 1) {
-  //   xnorm = sqrt(sum(square(x),0) - n * square(meanx));
-  //   x = x * diagmat(pow(xnorm,-1)) ;
-  //   meanx = meanx/xnorm ;
-  // } else {
-  //   xnorm = ones(p, 1);
-  // }
-  // normy = sqrt(sum(square(y))) ;
+  if (any(weights != 1)) {
+    for (int i=0; i<n; i++) {
+       x.row(i) /= weights ;
+    }
+    xbar /= weights;
+  }
 
-  // if (any(weights != 1)) {
-  //   x = x * diagmat(pow(weights,-1));
-  //   meanx = meanx/weights;
-  // }
-
-  // if (intercept == 1) {
-  //   xty = trans(x-ones(n,1) * meanx) * (y-ybar) ;
-  // } else {
-  //   xty = trans(x) * y;
-  // }
-
-  // xbar = as<vec>(meanx);
-  // normx = trans(xnorm);
-
+  if (intercept == 1) {
+    xty = trans(trans(y-ybar) * x) ;
+    for (int i=0;i<p;i++) {
+       xty(i) -=  sum(y-ybar) * xbar(i);
+    }
+  } else {
+    xty = trans(y.t()*x) ;
+  }
 }
 
-void standardize_sparse(sp_mat &x, vec &y, bool &intercept, bool &normalize, vec &weights,
-			vec &xty, rowvec &normx, double &normy, rowvec &xbar, double &ybar) {
+void standardize(sp_mat &x, vec &y, bool &intercept, bool &normalize, vec &weights,
+		 vec &xty, vec &normx, double &normy, vec &xbar, double &ybar) {
 
-  // uword n = x.n_rows;
-  // uword p = x.n_cols;
+  uword n = x.n_rows;
+  uword p = x.n_cols;
 
-  // rowvec meanx ;
-  // rowvec xnorm ;
+  if (intercept == 1) {
+    xbar = trans(rowvec(mean(x, 0)));
+    ybar = mean(y) ;
+  } else {
+    xbar = zeros(p) ;
+    ybar = 0;
+  }
 
-  // if (intercept == 1) {
-  //   meanx = mean(x, 0);
-  //   ybar = mean(y) ;
-  // } else {
-  //   meanx = zeros(p) ;
-  //   ybar = 0;
-  // }
+  if (normalize == 1) {
+    normx = sqrt(trans(sum(square(x),0)) - n * square(xbar));
+    for (int i=0; i<p; i++) {
+      x.col(i) /= normx(i);
+    }
+    xbar /= normx ;
+  } else {
+    normx = ones(p);
+  }
+  normy = sqrt(sum(square(y))) ;
 
-  // if (normalize == 1) {
-  //   xnorm = sqrt(sum(square(x),0) - n * square(meanx));
-  //   x = x * diagmat(pow(xnorm,-1)) ;
-  //   meanx = meanx/xnorm ;
-  // } else {
-  //   xnorm = ones(p, 1);
-  // }
-  // normy = sqrt(sum(square(y))) ;
+  if (any(weights != 1)) {
+    for (int i=0; i<n; i++) {
+       x.row(i) /= weights ;
+    }
+    xbar /= weights;
+  }
 
-  // if (any(weights != 1)) {
-  //   x = x * diagmat(pow(weights,-1));
-  //   meanx = meanx/weights;
-  // }
-
-  // if (intercept == 1) {
-  //   xty = trans(x-ones(n,1) * meanx) * (y-ybar) ;
-  // } else {
-  //   xty = trans(x) * y;
-  // }
-
-  // xbar = trans(meanx);
-  // normx = trans(xnorm);
+  if (intercept == 1) {
+    xty = trans(trans(y-ybar) * x) ;
+    for (int i=0;i<p;i++) {
+       xty(i) -=  sum(y-ybar) * xbar(i);
+    }
+  } else {
+    xty = trans(y.t()*x) ;
+  }
 }
 
 vec cg(mat A, vec b, vec x, double tol) {

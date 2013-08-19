@@ -8,19 +8,20 @@
 using namespace Rcpp;
 using namespace arma;
 
-SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA2, SEXP XBAR, SEXP NORMX, SEXP NORMY, SEXP WEIGHTS, SEXP NAIVE, SEXP EPS, SEXP MAXITER, SEXP MAXFEAT, SEXP FUN, SEXP VERBOSE, SEXP SPARSE, SEXP USECHOL, SEXP MONITOR) {
+SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP N_LAMBDA, SEXP MIN_RATIO, SEXP LAMBDA2, SEXP INTERCEPT, SEXP NORMALIZE, SEXP WEIGHTS, SEXP NAIVE, SEXP EPS, SEXP MAXITER, SEXP MAXFEAT, SEXP FUN, SEXP VERBOSE, SEXP SPARSE, SEXP USECHOL, SEXP MONITOR) {
 
   // disable messages being printed to the err2 stream
   std::ostream nullstream(0);
   set_stream_err2(nullstream);
 
   // Reading input variables
-  vec    lambda1  = as<vec>    (LAMBDA1)   ; // penalty levels
   double lambda2  = as<double> (LAMBDA2)   ; // the smooth (ridge) penality
   vec    weights  = as<vec>    (WEIGHTS)   ; // norm of the predictors
   bool   naive    = as<bool>   (NAIVE)     ; // naive elastic-net or not
   bool   usechol  = as<bool>   (USECHOL)   ; // use cholesky decomposition or not
-  vec    xty      = as<vec>    (XTY)       ; // reponses to predictors vector
+  bool intercept  = as<bool>   (INTERCEPT) ; // boolean for intercept mode
+  bool normalize  = as<bool>   (NORMALIZE) ; // boolean for standardizing the predictor
+  vec    y        = as<vec>    (Y)         ; // reponse vector
   double eps      = as<double> (EPS)       ; // precision required
   uword  fun      = as<int>    (FUN)       ; // solver (0=quadra, 1=pathwise, 2=fista)
   int    verbose  = as<int>    (VERBOSE)   ; // int for verbose mode (0/1/2)
@@ -28,29 +29,52 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA
   int    monitor  = as<int>    (MONITOR)   ; // convergence monitoring (1 == Grandvalet's bound ;-) 2 == Fenchel duality gap)
   uword  max_iter = as<int>    (MAXITER)   ; // max # of iterates of the active set
   uword  max_feat = as<int>    (MAXFEAT)   ; // max # of variables activated
+  
   // Managing the sparse encoding of the structuring matrix
   sp_mat spS      = as<sp_mat> (S)       ; // sparsely encoded structuring matrix
-
-  vec    xbar     = as<vec>    (XBAR)      ; // mean of the predictors
-  vec    normx    = as<vec>    (NORMX)     ; // norm of the predictors
-  double normy    = as<double> (NORMY)     ; // norm of the predictors
+  
+  vec    xty   ; // reponses to predictors vector
+  vec    xbar  ; // mean of the predictors
+  vec    normx ; // norm of the predictors
+  double normy ; // norm of the response
+  double ybar  ; // mean of the response
 
   // Managing the data matrix in both cases of sparse or dense coding
-  mat  x      ; // dense coding
-  sp_mat spX  ; // sparse coding
-  sp_mat spXt ; // transpose precomputation save time
+  mat x        ;
+  mat xt       ;
+  sp_mat sp_x  ;
+  sp_mat sp_xt ;
   if (sparse == 1) { // Check how x is encoded for reading
-    spX  = as<sp_mat>(X) ;
-    spXt = trans(as<sp_mat>(X)) ;
+    sp_x = as<sp_mat>(X) ;
+    standardize(sp_x, y, intercept, normalize, weights, xty, normx, normy, xbar, ybar) ;
+    
+    sp_xt = sp_x.t() ;
   } else {
-    x = as<mat>(X) - sqrt(weights) * trans(xbar) ;
+    x = as<mat>(X) ;
+    standardize(x, y, intercept, normalize, weights, xty, normx, normy, xbar, ybar) ;
+    
+    x  = x - sqrt(weights) * trans(xbar) ;
+    xt = x.t();
+  }
+
+  // VECTOR OF TUNING PARAMETER FOR THE L1-PENALTY
+  vec    lambda1   ; // penalty levels
+  uword n_lambda   ; // # of penalty levels
+  double min_ratio ; // ratio to compute the minimum level of penalty
+  if (LAMBDA1 != R_NilValue) {
+    lambda1  = as<vec>(LAMBDA1)  ;    
+    n_lambda = lambda1.n_elem    ;
+  } else {
+    n_lambda = as<uword>(N_LAMBDA) ;
+    min_ratio = as<double>(MIN_RATIO);
+    double lmax = max(abs(xty)) ;
+    lambda1 = exp10(linspace(log10(lmax), log10(min_ratio*lmax), n_lambda)) ;
   }
 
   // Initializing "first level" variables (outside of the lambda1 loop)
   mat  R                                 ; // Cholesky decomposition of XAtXA
-  uword n        = weights.n_elem        ; // sample size
-  uword p        = xty.n_elem            ; // problem size
-  uword n_lambda = lambda1.n_elem        ; // # of penalty
+  uword n        = x.n_rows              ; // sample size
+  uword p        = x.n_cols              ; // problem size
   uvec A                                 ; // set of currently activated variables
   vec  betaA                             ; // vector of currently activated parameters
   mat  xtxA                              ; // t(x) * x_A  covariance matrix
@@ -85,7 +109,12 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA
     beta0 = as<vec>(BETA0) ;
     A = find(beta0 != 0) ;
     betaA = beta0.elem(A) ;
-    xtxA = trans(x) * x.cols(A) ;
+    if (sparse == 1) {
+      // WRONG - DO IT THE RIGHT WAY
+      xtxA = mat(sp_xt * sp_x.col(0)) ;
+    } else {
+      xtxA = mat(xt * x.cols(A)) ;
+    }
     if (lambda2 > 0) {
       for (int i=0; i<A.n_elem;i++) {
 	xtxA.col(i) = xtxA.col(i) + spS.col(A(i));
@@ -137,7 +166,12 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA
 
       // Check if the variable is already in the active set
       if (are_in[var_in] == 0) {
-	add_var_enet(n, nbr_in, var_in, betaA, A, x, xtxA, xAtxA, xtxw, R, lambda2, xbar, spX, spXt, spS, sparse, usechol, fun) ;
+	if (sparse == 1) {
+	add_var_enet(n, nbr_in, var_in, betaA, A, sp_x, sp_xt, xtxA, xAtxA, xtxw, R, lambda2, xbar, spS, usechol, fun) ;
+	} else {
+	add_var_enet(n, nbr_in, var_in, betaA, A, x, xt, xtxA, xAtxA, xtxw, R, lambda2, xbar, spS, usechol, fun) ;
+	}
+
 	if (verbose == 2) {Rprintf("newly added variable %i\n",var_in);}
 	are_in[var_in] = 1;
 	nbr_in++;
@@ -263,6 +297,8 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP XTY, SEXP S, SEXP LAMBDA1, SEXP LAMBDA
   return List::create(Named("nzeros")     = nonzeros ,
 		      Named("iA")         = iA       ,
 		      Named("jA")         = jA       ,
+		      Named("meanx")      = xbar % normx % weights,
+		      Named("normx")      = normx    ,
 		      Named("lambda1")    = lambda1  ,
 		      Named("nbr.in")     = nbr_in   ,
 		      Named("it.active")  = it_active,
@@ -317,7 +353,7 @@ void choldowndate(mat &R, int j) {
 }
 
 
-void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat &x, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, double &lambda2, vec &xbar, sp_mat &spX, sp_mat &spXt, sp_mat &spS, bool &sparse, bool &usechol, uword &fun) {
+void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat &x, mat &xt, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, double &lambda2, vec &xbar, sp_mat &spS, bool &usechol, uword &fun) {
 
   vec  new_col   ; // column currently added to xtxA
 
@@ -326,12 +362,39 @@ void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat
   betaA.resize(nbr_in+1) ; // update the vector of active parameters
   betaA[nbr_in]  = 0.0   ;
 
-  if (sparse == 1) {
-    // new_col = trans(trans(spX.col(var_in)) * spX) - n * xbar * as_scalar(xbar[var_in]);
-    new_col = spXt * spX.col(var_in) - n * xbar * as_scalar(xbar[var_in]);
-  } else {
-    new_col = x.t() * x.col(var_in);
+  new_col = xt * x.col(var_in);
+  if (lambda2 > 0) {
+    // Adding the column corresponding to the structurating matrix
+    new_col += spS.col(var_in);
   }
+
+  // UPDATE THE xtxA AND xAtxA MATRICES
+  if (nbr_in > 0) {
+    xAtxA = join_cols(xAtxA, xtxA.row(var_in)) ;
+  }
+  xtxA  = join_rows(xtxA, new_col) ;
+  xAtxA = join_rows(xAtxA, trans(xtxA.row(var_in))) ;
+
+  if (fun == 0 & usechol == 1) {
+    cholupdate(R, xAtxA) ;
+  }
+
+  if (fun == 1) {
+    xtxw.resize(nbr_in+1) ;
+    xtxw(nbr_in) = dot(xAtxA.col(nbr_in),betaA);
+  }
+}
+
+void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, sp_mat &x, sp_mat &xt, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, double &lambda2, vec &xbar, sp_mat &spS, bool &usechol, uword &fun) {
+
+  vec  new_col   ; // column currently added to xtxA
+
+  A.resize(nbr_in+1)     ; // update the active set
+  A[nbr_in] = var_in     ;
+  betaA.resize(nbr_in+1) ; // update the vector of active parameters
+  betaA[nbr_in]  = 0.0   ;
+
+  new_col = xt * x.col(var_in) - n * xbar * as_scalar(xbar[var_in]);
   if (lambda2 > 0) {
     // Adding the column corresponding to the structurating matrix
     new_col += spS.col(var_in);

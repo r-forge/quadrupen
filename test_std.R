@@ -46,10 +46,7 @@ standardize_R <- function(x,y,intercept,normalize,penscale,zero=.Machine$double.
   } else {
     xty   <- drop(crossprod(y,x))
   }
-  ## Building the sparsely encoded design/data matrix
-  if (inherits(x, "sparseMatrix")) {
-    x     <- list(Xi = x@i, Xj = x@p, Xnp = diff(x@p), Xx = x@x)
-  }
+
   return(list(xbar=xbar, ybar=ybar, normx=normx, normy=normy, xty=xty, x=x))
 }
 
@@ -63,9 +60,9 @@ code_dense <- '
   bool normalize = as<bool>(NORMALIZE) ;
   vec  penscale  = as<vec> (PENSCALE)  ;
 
-  mat xbar  ;
+  rowvec xbar     ;
   double ybar  ;
-  mat normx ;
+  rowvec normx    ;
   double normy ;
   vec xty      ;
 
@@ -82,26 +79,29 @@ code_dense <- '
 
   if (normalize == 1) {
     normx = sqrt(sum(square(x),0) - n * square(xbar));
-    for (int k=0; k++; k < p) {
-       x.col(k) = x.col(k) / normx[k] ;
+    for (int i=0; i<p; i++) {
+      x.col(i) = x.col(i) / normx(i);
     }
-    xbar = xbar/normx ;
+    xbar /= normx ;
   } else {
-    normx = ones(p, 1);
+    normx = ones(1, p);
   }
   normy = sqrt(sum(square(y))) ;
 
   if (any(penscale != 1)) {
-    for (int k=0; k++; k < p) {
-       x.col(k) = x.col(k) / penscale[k] ;
+    for (int i=0; i<p; i++) {
+       x.col(i) = x.col(i)/ penscale(i) ;
     }
-    xbar = xbar/penscale;
+    xbar /= penscale;
   }
 
   if (intercept == 1) {
-    xty = trans(x- ones(n,1) * xbar) * (y-ybar) ;
+    xty = trans(trans(y-ybar) * x) ;
+    for (int i=0;i<p;i++) {
+       xty(i) -=  sum(y-ybar) * xbar(i);
+    }
   } else {
-    xty = trans(x) * y;
+    xty = trans(y.t()*x) ;
   }
 
   return List::create(Named("xbar")  = xbar ,
@@ -109,11 +109,30 @@ code_dense <- '
 		      Named("normx") = normx,
 		      Named("normy") = normy,
 		      Named("xty")   = xty  ,
-		      Named("x")     = wrap(x)    ) ;
+		      Named("x")     = wrap(x)   ) ;
 '
 
-code_sparse <- '
+standardize_cpp <- cxxfunction(signature(X="matrix",Y="numeric",INTERCEPT="boolean",
+                                         NORMALIZE="boolean",PENSCALE="numeric"),
+                               plugin="RcppArmadillo", body=code_dense)
 
+
+x <- matrix(rnorm(2000*1000),2000,1000)
+y <- rnorm(2000)
+weights <- rep(1,ncol(x))
+print(system.time(dense.R   <- standardize_R(x,y,TRUE,TRUE,weights)))
+print(system.time(dense.cpp <- standardize_cpp(x,y,TRUE,TRUE,weights)))
+
+dense.cpp$xbar <- as.numeric(dense.cpp$xbar)
+dense.cpp$normx <- as.numeric(dense.cpp$normx)
+dense.cpp$xty <- as.numeric(dense.cpp$xty)
+
+expect_that(dense.cpp, is_equivalent_to(dense.R))
+
+x[sample(1:length(x),2000*800)] <- 0
+x <- Matrix(x, sparse=TRUE)
+
+code_sparse <- '
   using namespace Rcpp;
   using namespace arma;
 
@@ -123,9 +142,9 @@ code_sparse <- '
   bool normalize = as<bool>(NORMALIZE) ;
   vec  penscale  = as<vec> (PENSCALE)  ;
 
-  mat xbar  ;
+  rowvec xbar  ;
   double ybar  ;
-  mat normx ;
+  rowvec normx ;
   double normy ;
   vec xty      ;
 
@@ -133,7 +152,7 @@ code_sparse <- '
   uword p = x.n_cols;
 
   if (intercept == 1) {
-    xbar = mean(x, 0);
+    xbar = rowvec(mean(x, 0));
     ybar = mean(y) ;
   } else {
     xbar = zeros(1,p) ;
@@ -142,26 +161,29 @@ code_sparse <- '
 
   if (normalize == 1) {
     normx = sqrt(sum(square(x),0) - n * square(xbar));
-    for (int k=0; k++; k < p) {
-       x.col(k) = x.col(k) / normx[k] ;
+    for (int i=0; i<p; i++) {
+      x.col(i) /= normx(i);
     }
-    xbar = xbar/normx ;
+    xbar /= normx ;
   } else {
-    normx = ones(p, 1);
+    normx = ones(1, p);
   }
   normy = sqrt(sum(square(y))) ;
 
   if (any(penscale != 1)) {
-    for (int k=0; k++; k < p) {
-       x.col(k) = x.col(k) / penscale[k] ;
+    for (int i=0; i<n; i++) {
+       x.row(i) /= penscale ;
     }
-    xbar = xbar/penscale;
+    xbar /= penscale;
   }
 
   if (intercept == 1) {
-    xty = trans( trans(y-ybar) * x - trans(y-ybar) * ones(n,1) * xbar) ;
+    xty = trans(trans(y-ybar) * x) ;
+    for (int i=0;i<p;i++) {
+       xty(i) -=  sum(y-ybar) * xbar(i);
+    }
   } else {
-    xty = trans(y.t()*x);
+    xty = trans(y.t()*x) ;
   }
 
   return List::create(Named("xbar")  = xbar ,
@@ -172,30 +194,12 @@ code_sparse <- '
 		      Named("x")     = wrap(x)) ;
 '
 
-standardize_cpp <- cxxfunction(signature(X="matrix",Y="numeric",INTERCEPT="boolean",
-                                         NORMALIZE="boolean",PENSCALE="numeric"),
-                               plugin="RcppArmadillo", body=code_dense)
-
 standardize_cpp_sparse <- cxxfunction(signature(X="dgCMatrix",Y="numeric",INTERCEPT="boolean",
                                                 NORMALIZE="boolean",PENSCALE="numeric"),
                                       plugin="RcppArmadillo",
                                       include= "#include <RcppArmadilloExtensions/spmat.h>",
                                       body=code_sparse)
 
-x <- matrix(rnorm(2000*1000),2000,1000)
-y <- rnorm(2000)
-
-print(system.time(dense.R   <- standardize_R(x,y,TRUE,TRUE,rep(1,1000))))
-print(system.time(dense.cpp <- standardize_cpp(x,y,TRUE,TRUE,rep(1,1000))))
-
-dense.cpp$xbar <- as.numeric(dense.cpp$xbar)
-dense.cpp$normx <- as.numeric(dense.cpp$normx)
-dense.cpp$xty <- as.numeric(dense.cpp$xty)
-
-expect_that(dense.cpp, is_equivalent_to(dense.R))
-
-x[sample(1:length(x),2000*800)] <- 0
-x <- Matrix(x, sparse=TRUE)
 print(system.time(sparse.R   <- standardize_R(x,y,TRUE,TRUE,rep(1,1000))))
 print(system.time(sparse.cpp <- standardize_cpp_sparse(x,y,TRUE,TRUE,rep(1,1000))))
 
@@ -203,6 +207,6 @@ sparse.cpp$xbar <- as.numeric(sparse.cpp$xbar)
 sparse.cpp$normx <- as.numeric(sparse.cpp$normx)
 sparse.cpp$xty <- as.numeric(sparse.cpp$xty)
 sparse.cpp$x <- as.matrix(sparse.cpp$x)
-## sparse.R$x <- as(sparse.R$x, "matrix")
+sparse.R$x <- as(sparse.R$x, "matrix")
 
 expect_that(sparse.cpp, is_equivalent_to(sparse.R))
