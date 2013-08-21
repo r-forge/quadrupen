@@ -8,19 +8,40 @@
 using namespace Rcpp;
 using namespace arma;
 
-SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP N_LAMBDA, SEXP MIN_RATIO, SEXP LAMBDA2, SEXP INTERCEPT, SEXP NORMALIZE, SEXP WEIGHTS, SEXP NAIVE, SEXP EPS, SEXP MAXITER, SEXP MAXFEAT, SEXP FUN, SEXP VERBOSE, SEXP SPARSE, SEXP USECHOL, SEXP MONITOR) {
+SEXP elastic_net(SEXP BETA0    ,
+		 SEXP X        ,
+		 SEXP Y        ,
+		 SEXP STRUCT   ,
+		 SEXP LAMBDA1  ,
+		 SEXP N_LAMBDA ,
+		 SEXP MIN_RATIO,
+		 SEXP PENSCALE ,
+		 SEXP LAMBDA2  ,
+		 SEXP INTERCEPT,
+		 SEXP NORMALIZE,
+		 SEXP WEIGHTS  ,
+		 SEXP NAIVE    ,
+		 SEXP EPS      ,
+		 SEXP MAXITER  ,
+		 SEXP MAXFEAT  ,
+		 SEXP FUN      ,
+		 SEXP VERBOSE  ,
+		 SEXP SPARSE   ,
+		 SEXP USECHOL  ,
+		 SEXP MONITOR  ) {
 
   // disable messages being printed to the err2 stream
   std::ostream nullstream(0);
   set_stream_err2(nullstream);
 
   // Reading input variables
-  double lambda2  = as<double> (LAMBDA2)   ; // the smooth (ridge) penality
-  vec    weights  = as<vec>    (WEIGHTS)   ; // norm of the predictors
-  bool   naive    = as<bool>   (NAIVE)     ; // naive elastic-net or not
-  bool   usechol  = as<bool>   (USECHOL)   ; // use cholesky decomposition or not
   bool intercept  = as<bool>   (INTERCEPT) ; // boolean for intercept mode
   bool normalize  = as<bool>   (NORMALIZE) ; // boolean for standardizing the predictor
+  double lambda2  = as<double> (LAMBDA2)   ; // the smooth (ridge) penality
+  vec    weights  = as<vec>    (WEIGHTS)   ; // observation weights (not use at the moment)
+  vec    penscale = as<vec>    (PENSCALE)  ; // penalty weights
+  bool   naive    = as<bool>   (NAIVE)     ; // naive elastic-net or not
+  bool   usechol  = as<bool>   (USECHOL)   ; // use cholesky decomposition or not
   vec    y        = as<vec>    (Y)         ; // reponse vector
   double eps      = as<double> (EPS)       ; // precision required
   uword  fun      = as<int>    (FUN)       ; // solver (0=quadra, 1=pathwise, 2=fista)
@@ -29,15 +50,14 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP N_LAMBDA
   int    monitor  = as<int>    (MONITOR)   ; // convergence monitoring (1 == Grandvalet's bound ;-) 2 == Fenchel duality gap)
   uword  max_iter = as<int>    (MAXITER)   ; // max # of iterates of the active set
   uword  max_feat = as<int>    (MAXFEAT)   ; // max # of variables activated
-  
-  // Managing the sparse encoding of the structuring matrix
-  sp_mat spS      = as<sp_mat> (S)       ; // sparsely encoded structuring matrix
-  
+
   vec    xty   ; // reponses to predictors vector
   vec    xbar  ; // mean of the predictors
   vec    normx ; // norm of the predictors
   double normy ; // norm of the response
   double ybar  ; // mean of the response
+  uword n      ; // sample size
+  uword p      ; // problem size
 
   // Managing the data matrix in both cases of sparse or dense coding
   mat x        ;
@@ -46,15 +66,30 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP N_LAMBDA
   sp_mat sp_xt ;
   if (sparse == 1) { // Check how x is encoded for reading
     sp_x = as<sp_mat>(X) ;
-    standardize(sp_x, y, intercept, normalize, weights, xty, normx, normy, xbar, ybar) ;
-    
+    standardize(sp_x, y, intercept, normalize, penscale, xty, normx, normy, xbar, ybar) ;
     sp_xt = sp_x.t() ;
+    n = sp_x.n_rows ;
+    p = sp_x.n_cols ;
   } else {
     x = as<mat>(X) ;
-    standardize(x, y, intercept, normalize, weights, xty, normx, normy, xbar, ybar) ;
-    
+    standardize(x, y, intercept, normalize, penscale, xty, normx, normy, xbar, ybar) ;
     x  = x - sqrt(weights) * trans(xbar) ;
     xt = x.t();
+    n = x.n_rows ;
+    p = x.n_cols ;
+  }
+
+  // STRUCTURATING MATRIX
+  sp_mat S ; // sparsely encoded structuring matrix
+  if (STRUCT == R_NilValue | lambda2 == 0) {
+    S = speye(p,p);
+  } else {
+    S = as<sp_mat> (STRUCT) ;
+  }
+  if (lambda2 > 0) {
+    // renormalize the l2 structuring matrix according to the l1
+    // penscale values, so as it does not interfer with the l2 penalty.
+    S = diagmat(sqrt(lambda2)*pow(penscale,-1/2)) * S * diagmat(sqrt(lambda2)*pow(penscale,-1/2)) ;
   }
 
   // VECTOR OF TUNING PARAMETER FOR THE L1-PENALTY
@@ -62,7 +97,7 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP N_LAMBDA
   uword n_lambda   ; // # of penalty levels
   double min_ratio ; // ratio to compute the minimum level of penalty
   if (LAMBDA1 != R_NilValue) {
-    lambda1  = as<vec>(LAMBDA1)  ;    
+    lambda1  = as<vec>(LAMBDA1)  ;
     n_lambda = lambda1.n_elem    ;
   } else {
     n_lambda = as<uword>(N_LAMBDA) ;
@@ -73,14 +108,13 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP N_LAMBDA
 
   // Initializing "first level" variables (outside of the lambda1 loop)
   mat  R                                 ; // Cholesky decomposition of XAtXA
-  uword n        = x.n_rows              ; // sample size
-  uword p        = x.n_cols              ; // problem size
   uvec A                                 ; // set of currently activated variables
   vec  betaA                             ; // vector of currently activated parameters
   mat  xtxA                              ; // t(x) * x_A  covariance matrix
   mat  xAtxA                             ; // t(x_A) * x_A covariance matrix of the activated variable
   vec  xtxw                              ; // t(x_A) * x_A * beta(A)
   vec  grd       = -xty                  ; // smooth part of the gradient
+  vec  mu        = zeros<vec>(n_lambda)  ; // the intercept term
 
   vec  max_grd   = zeros<vec>(n_lambda)  ; // a vector with the successively reach duality gap
   vec  converge  = zeros<vec>(n_lambda)  ; // a vector indicating if convergence occured (0/1/2)
@@ -117,7 +151,7 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP N_LAMBDA
     }
     if (lambda2 > 0) {
       for (int i=0; i<A.n_elem;i++) {
-	xtxA.col(i) = xtxA.col(i) + spS.col(A(i));
+	xtxA.col(i) = xtxA.col(i) + S.col(A(i));
 	are_in(A(i)) = 1;
       }
     }
@@ -167,9 +201,9 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP N_LAMBDA
       // Check if the variable is already in the active set
       if (are_in[var_in] == 0) {
 	if (sparse == 1) {
-	add_var_enet(n, nbr_in, var_in, betaA, A, sp_x, sp_xt, xtxA, xAtxA, xtxw, R, lambda2, xbar, spS, usechol, fun) ;
+	add_var_enet(n, nbr_in, var_in, betaA, A, sp_x, sp_xt, xtxA, xAtxA, xtxw, R, lambda2, xbar, S, usechol, fun) ;
 	} else {
-	add_var_enet(n, nbr_in, var_in, betaA, A, x, xt, xtxA, xAtxA, xtxw, R, lambda2, xbar, spS, usechol, fun) ;
+	add_var_enet(n, nbr_in, var_in, betaA, A, x, xt, xtxA, xAtxA, xtxw, R, lambda2, xbar, S, usechol, fun) ;
 	}
 
 	if (verbose == 2) {Rprintf("newly added variable %i\n",var_in);}
@@ -278,10 +312,19 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP N_LAMBDA
       break;
     } else {
       // Preparing next value of the penalty
+      if (any(penscale != 1)) {
+	betaA /= penscale.elem(A);
+      }
+      if (intercept == 1) {
+	mu[m] = - dot(betaA/normx.elem(A),xbar.elem(A) % penscale.elem(A)) ;
+      }
       if (naive == 1) {
 	nonzeros = join_cols(nonzeros, betaA/normx.elem(A));
-      } else {
+	mu[m] = ybar + mu[m] ;
+      }
+      else {
 	nonzeros = join_cols(nonzeros, (1+lambda2)*betaA/normx.elem(A));
+	mu[m] = ybar + (1+lambda2)*mu[m] ;
       }
       iA = join_cols(iA, m*ones(betaA.n_elem,1) );
       jA = join_cols(jA, conv_to<mat>::from(A) ) ;
@@ -297,7 +340,8 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP N_LAMBDA
   return List::create(Named("nzeros")     = nonzeros ,
 		      Named("iA")         = iA       ,
 		      Named("jA")         = jA       ,
-		      Named("meanx")      = xbar % normx % weights,
+		      Named("mu")         = mu       ,
+		      Named("meanx")      = xbar % normx % penscale,
 		      Named("normx")      = normx    ,
 		      Named("lambda1")    = lambda1  ,
 		      Named("nbr.in")     = nbr_in   ,
@@ -311,176 +355,3 @@ SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP N_LAMBDA
 
 }
 
-void cholupdate(mat &R , mat &XtX) {
-  int p = XtX.n_cols;
-
-  if (p == 1) {
-    R = sqrt(XtX);
-  } else {
-    colvec rp  = zeros<colvec>(p,1);
-    rp.subvec(0,p-2) = solve (trimatl(strans(R)), XtX.submat(0,p-1,p-2,p-1));
-    rp(p-1) = sqrt(XtX(p-1,p-1) - dot(rp,rp));
-    R = join_rows( join_cols(R, zeros<mat>(1,p-1)) , rp);
-  }
-}
-
-void choldowndate(mat &R, int j) {
-
-  vec x = zeros<vec>(2,1);
-  mat G = zeros<mat>(2,2);
-
-  R.shed_col(j);
-  int p = R.n_cols;
-  double r;
-  for (int k=j; k<p; k++) {
-    x = R.submat(k,k,k+1,k);
-
-    if (x[1] != 0) {
-      r = norm(x,2);
-      G <<  x(0) << x(1) << endr
-	<< -x(1) << x(0) << endr;
-      G = G / r;
-      x(0) = r; x(1) = 0;
-    } else {
-      G = eye(2,2);
-    }
-    R.submat(k,k,k+1,k) = x;
-    if (k < p-1) {
-      R.submat(k,k+1,k+1,p-1) = G * R.submat(k,k+1,k+1,p-1);
-    }
-  }
-  R.shed_row(p);
-}
-
-
-void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat &x, mat &xt, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, double &lambda2, vec &xbar, sp_mat &spS, bool &usechol, uword &fun) {
-
-  vec  new_col   ; // column currently added to xtxA
-
-  A.resize(nbr_in+1)     ; // update the active set
-  A[nbr_in] = var_in     ;
-  betaA.resize(nbr_in+1) ; // update the vector of active parameters
-  betaA[nbr_in]  = 0.0   ;
-
-  new_col = xt * x.col(var_in);
-  if (lambda2 > 0) {
-    // Adding the column corresponding to the structurating matrix
-    new_col += spS.col(var_in);
-  }
-
-  // UPDATE THE xtxA AND xAtxA MATRICES
-  if (nbr_in > 0) {
-    xAtxA = join_cols(xAtxA, xtxA.row(var_in)) ;
-  }
-  xtxA  = join_rows(xtxA, new_col) ;
-  xAtxA = join_rows(xAtxA, trans(xtxA.row(var_in))) ;
-
-  if (fun == 0 & usechol == 1) {
-    cholupdate(R, xAtxA) ;
-  }
-
-  if (fun == 1) {
-    xtxw.resize(nbr_in+1) ;
-    xtxw(nbr_in) = dot(xAtxA.col(nbr_in),betaA);
-  }
-}
-
-void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, sp_mat &x, sp_mat &xt, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, double &lambda2, vec &xbar, sp_mat &spS, bool &usechol, uword &fun) {
-
-  vec  new_col   ; // column currently added to xtxA
-
-  A.resize(nbr_in+1)     ; // update the active set
-  A[nbr_in] = var_in     ;
-  betaA.resize(nbr_in+1) ; // update the vector of active parameters
-  betaA[nbr_in]  = 0.0   ;
-
-  new_col = xt * x.col(var_in) - n * xbar * as_scalar(xbar[var_in]);
-  if (lambda2 > 0) {
-    // Adding the column corresponding to the structurating matrix
-    new_col += spS.col(var_in);
-  }
-
-  // UPDATE THE xtxA AND xAtxA MATRICES
-  if (nbr_in > 0) {
-    xAtxA = join_cols(xAtxA, xtxA.row(var_in)) ;
-  }
-  xtxA  = join_rows(xtxA, new_col) ;
-  xAtxA = join_rows(xAtxA, trans(xtxA.row(var_in))) ;
-
-  if (fun == 0 & usechol == 1) {
-    cholupdate(R, xAtxA) ;
-  }
-
-  if (fun == 1) {
-    xtxw.resize(nbr_in+1) ;
-    xtxw(nbr_in) = dot(xAtxA.col(nbr_in),betaA);
-  }
-}
-
-void remove_var_enet(int &nbr_in, uvec &are_in, vec &betaA, uvec &A, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, uvec &null, bool &usechol, uword &fun) {
-
-  for (int j=0; j<null.n_elem; j++) {
-    are_in[A(null[j])]  = 0 ;
-    A.shed_row(null[j])     ;
-    betaA.shed_row(null[j]) ;
-    if (fun == 1) {
-      xtxw.shed_row(null[j]);
-    }
-    xtxA.shed_col(null[j])  ;
-    xAtxA.shed_col(null[j]) ;
-    xAtxA.shed_row(null[j]) ;
-    if (fun == 0 & usechol == 1) {
-      choldowndate(R, null[j]) ;
-    }
-    nbr_in--;
-  }
-
-}
-
-void bound_to_optimal(vec &betaA,
-		      mat &xAtxA,
-		      vec &xty,
-		      vec &grd,
-		      double &lambda1,
-		      double &lambda2,
-		      double &normy,
-		      uvec &A,
-		      int &monitor,
-		      vec &J_hat,
-		      vec &D_hat) {
-
-  // to store the results
-  int dim = J_hat.n_elem ;
-  J_hat.resize(dim+1);
-  D_hat.resize(dim+1);
-
-  // gamma equals the max |gradient|
-  vec gamma = grd ;
-  double nu = norm(gamma, "inf");
-  int p = xty.n_elem ;
-
-  double quad_loss =  pow(normy,2) + dot(betaA,xAtxA * betaA) - 2*dot(betaA, xty.elem(A)) ;
-  J_hat(dim)  =  0.5*quad_loss - dot(betaA, gamma.elem(A));
-
-  if (monitor == 1) {
-    uvec Ac = find(gamma > nu); // set of adversarial variables outside the boundary
-    // Grandvalet's bound
-    D_hat(dim) = J_hat(dim) - (lambda1/nu) * J_hat(dim) - (pow(lambda1,2)/(2*lambda2))*((lambda1*(p-Ac.n_elem))/nu + pow(norm(gamma.elem(Ac),2)/nu,2)-p);
-  } else {
-    // Fenchel's bound
-    if (nu < lambda1) {
-      nu = lambda1;
-    }
-    D_hat(dim) = 0.5 * quad_loss * (1+pow(lambda1/nu,2)) + sum(abs(lambda1*betaA)) + (lambda1/nu)*(dot(betaA,xty.elem(A))-pow(normy,2));
-  }
-
-  // keep the smallest bound reached so far for a given lambda value
-  if (dim>0) {
-    if (J_hat[dim-1] < J_hat[dim]) {
-      if (D_hat[dim] > D_hat[dim-1] - (J_hat[dim-1] - J_hat[dim])) {
-	D_hat[dim] = D_hat[dim-1];
-      }
-    }
-  }
-
-}

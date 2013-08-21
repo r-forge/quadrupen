@@ -234,7 +234,7 @@ elastic.net <- function(x,
     if(is.numeric(max.feat) & !is.integer(max.feat))
       max.feat <- as.integer(max.feat)
   }
-  
+
   return(quadrupen(beta0 = beta0,
                    x=x,
                    y=y,
@@ -545,33 +545,6 @@ quadrupen <- function(beta0    ,
   ctrl[names(control)] <- control # overwritten by user specifications
   if (ctrl$timer) {r.start <- proc.time()}
 
-  get.lambda1 <- switch(penalty,
-                        "elastic.net" = get.lambda1.l1,
-                        "bounded.reg" = get.lambda1.li)
-
-  ## ======================================================
-  ## INTERCEPT AND NORMALIZATION TREATMENT
-  ##   input <- standardize(x,y,intercept,normalize,penscale)
-
-  ## ======================================================
-  ## GENERATE A GRID OF PENALTY IF NONE HAS BEEN PROVIDED
-  ##  if (is.null(lambda1))
-  ##    lambda1 <- get.lambda1(input$xty,nlambda1,min.ratio)
-
-  ## ======================================================
-  ## STRUCTURATING MATRIX
-  if (is.null(struct)) {
-    struct <- sparseMatrix(i=1:p,j=1:p,x=rep(1,p))
-  }
-  if (lambda2 > 0) {
-    ## renormalize the l2 structuring matrix according to the l1
-    ## penscale values, so as it does not interfer with the l2 penalty.
-    D <- Diagonal(x=sqrt(lambda2)/penscale)
-    S <- D %*% struct %*% D
-  } else {
-    S <- Matrix(0,p,p)
-  }
-
   ## ======================================================
   ## STARTING C++ CALL TO ENET_LS
   if (ctrl$timer) {cpp.start <- proc.time()}
@@ -580,10 +553,11 @@ quadrupen <- function(beta0    ,
                  beta0        ,
                  x            ,
                  y            ,
-                 S            ,
+                 struct       ,
                  lambda1      ,
                  nlambda1     ,
                  min.ratio    ,
+                 penscale     ,
                  lambda2      ,
                  intercept    ,
                  normalize    ,
@@ -611,20 +585,24 @@ quadrupen <- function(beta0    ,
   }
   if (penalty == "bounded.reg") {
     out <- .Call("bounded_reg",
-                 input$x,
-                 input$xty,
-                 as.matrix(S),
-                 lambda1,
-                 lambda2,
-                 input$xbar,
-                 input$normx,
-                 rep(1,n),
-                 naive,
-                 ctrl$thresh,
+                 x,
+                 y,
+                 S,
+                 lambda1      ,
+                 nlambda1     ,
+                 min.ratio    ,
+                 penscale     ,
+                 lambda2      ,
+                 intercept    ,
+                 normalize    ,
+                 rep(1,n)     ,
+                 naive        ,
+                 ctrl$thresh  ,
                  ctrl$max.iter,
-                 max.feat,
+                 max.feat     ,
                  ifelse(ctrl$method=="fista",1,0),
                  ctrl$verbose,
+                 inherits(x, "sparseMatrix"),
                  ctrl$bulletproof,
                  package = "quadrupen")
     coefficients <- Matrix(out$coefficients)
@@ -662,32 +640,24 @@ quadrupen <- function(beta0    ,
   dim.names <- list()
   dimnames(coefficients)[[1]] <- round(c(out$lambda1),3)
   dimnames(coefficients)[[2]] <- 1:p
-  meanx <- drop(out$meanx)
-  normx <- drop(out$normx)
-  
-  ## Renormalize according to the first penalty scale
-  if (any(penscale != 1)) {
-    coefficients <- sweep(coefficients, 2L, penscale,"/",check.margin=FALSE)
-  }
+  mu <- drop(out$mu)
 
   ## FITTED VALUES AND RESIDUALS...
   if (intercept) {
-    mu <- as.vector(mean(y)-coefficients %*% (meanx/normx))
-    fitted <- sweep(x %*% t(coefficients),2L,-mu,check.margin=FALSE)
+    fitted <- sweep(tcrossprod(x,coefficients),2L,-mu,check.margin=FALSE)
   } else {
     mu <- 0
-    fitted <- x %*% t(coefficients)
+    fitted <- tcrossprod(x,coefficients)
   }
-
-  residuals <- matrix(rep(y, length(out$lambda1)), nrow=n) - fitted
+  residuals <- sweep(-fitted,2L,-y,check.margin=FALSE)
 
   return(new("quadrupen",
              coefficients = coefficients   ,
              active.set   = active.set     ,
              intercept    = intercept      ,
              mu           = mu             ,
-             meanx        = meanx          ,
-             normx        = normx          ,
+             meanx        = drop(out$meanx),
+             normx        = drop(out$normx),
              fitted       = fitted         ,
              residuals    = residuals      ,
              penscale     = penscale       ,
@@ -738,7 +708,7 @@ standardize <- function(x,y,intercept,normalize,penscale,zero=.Machine$double.ep
     x <- sweep(x, 2L, penscale, "/", check.margin=FALSE)
     xbar <- xbar/penscale
   }
-  ## Computuping marginal correlation
+  ## Computing marginal correlation
   if (intercept) {
     xty   <- drop(crossprod(y-ybar,sweep(x,2L,xbar)))
   } else {

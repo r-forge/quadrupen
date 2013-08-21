@@ -15,27 +15,30 @@
 
 #include <sys/time.h>
 #include <RcppArmadillo.h>
-#include <RcppArmadilloExtensions/spmat.h>
-
 #include "utils.h"
 #include "quadratic.h"
 #include "first_order.h"
 
-using namespace Rcpp;
-using namespace arma;
-
-void cholupdate(mat &R, mat& XtX) ;
-
-void choldowndate(mat &R, int j) ;
-
-void bound_to_optimal(vec &betaA, mat &xAtxA, vec &xty, vec &grd, double &lambda1, double &lambda2, double &normy, uvec &A, int &monitor, vec &J_hat, vec &D_hat) ;
-
-void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat &x, mat &xt, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, double &lambda2, vec &xbar, sp_mat &spS, bool &usechol, uword &fun) ;
-
-void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, sp_mat &x, sp_mat &xt, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, double &lambda2, vec &xbar, sp_mat &spS, bool &usechol, uword &fun) ;
-
-void remove_var_enet(int &nbr_in, uvec &are_in, vec &betaA, uvec &A, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R,  uvec &null, bool &usechol, uword &fun) ;
-
-RcppExport SEXP elastic_net(SEXP BETA0, SEXP X, SEXP Y, SEXP S, SEXP LAMBDA1, SEXP NLAMBDA1, SEXP MIN_RATIO, SEXP LAMBDA2, SEXP INTERCEPT, SEXP NORMALIZE, SEXP WEIGHTS, SEXP NAIVE, SEXP EPS, SEXP MAXITER, SEXP MAXFEAT, SEXP FUN, SEXP VERBOSE, SEXP SPARSE, SEXP USECHOL, SEXP MONITOR) ;
+RcppExport SEXP elastic_net(SEXP BETA0    ,
+			    SEXP X        ,
+			    SEXP Y        ,
+			    SEXP STRUCT   ,
+			    SEXP LAMBDA1  ,
+			    SEXP N_LAMBDA ,
+			    SEXP MIN_RATIO,
+			    SEXP PENSCALE ,
+			    SEXP LAMBDA2  ,
+			    SEXP INTERCEPT,
+			    SEXP NORMALIZE,
+			    SEXP WEIGHTS  ,
+			    SEXP NAIVE    ,
+			    SEXP EPS      ,
+			    SEXP MAXITER  ,
+			    SEXP MAXFEAT  ,
+			    SEXP FUN      ,
+			    SEXP VERBOSE  ,
+			    SEXP SPARSE   ,
+			    SEXP USECHOL  ,
+			    SEXP MONITOR  ) ;
 
 #endif

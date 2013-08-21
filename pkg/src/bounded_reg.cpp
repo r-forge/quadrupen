@@ -8,36 +8,87 @@
 using namespace Rcpp;
 using namespace arma;
 
-SEXP bounded_reg(SEXP X, SEXP XTY, SEXP STRUCT, SEXP LAMBDA1, SEXP LAMBDA2, SEXP XBAR, SEXP NORMX, SEXP WEIGHTS, SEXP NAIVE, SEXP EPS, SEXP MAXITER, SEXP MAXFEAT, SEXP FUN, SEXP VERBOSE, SEXP BULLETPROOF) {
+SEXP bounded_reg(SEXP X        ,
+		 SEXP Y        ,
+		 SEXP STRUCT   ,
+		 SEXP LAMBDA1  ,
+		 SEXP N_LAMBDA ,
+		 SEXP MIN_RATIO,
+		 SEXP PENSCALE ,
+		 SEXP LAMBDA2  ,
+		 SEXP INTERCEPT,
+		 SEXP NORMALIZE,
+		 SEXP WEIGHTS  ,
+		 SEXP NAIVE    ,
+		 SEXP EPS      ,
+		 SEXP MAXITER  ,
+		 SEXP MAXFEAT  ,
+		 SEXP FUN      ,
+		 SEXP VERBOSE  ,
+		 SEXP SPARSE   ,
+		 SEXP BULLETPROOF) {
 
   // disable messages being printed to the err2 stream (armadillo's runtime error)
   std::ostream nullstream(0);
   set_stream_err2(nullstream);
 
   // Reading input variables
-  mat    x        = as<mat>    (X)           ; // densely encoded SCALED design matrix
-  vec    lambda1  = as<vec>    (LAMBDA1)     ; // penalty levels
+  bool intercept  = as<bool>   (INTERCEPT)   ; // boolean for intercept mode
+  bool normalize  = as<bool>   (NORMALIZE)   ; // boolean for standardizing the predictor
+  sp_mat  struc   = as<sp_mat> (STRUCT)      ; // the structuring matrix
   double lambda2  = as<double> (LAMBDA2)     ; // penalty levels
-  mat    struc    = as<mat>    (STRUCT)      ; // the structuring matrix
-  vec    xbar     = as<vec>    (XBAR)        ; // mean of the predictors
-  vec    normx    = as<vec>    (NORMX)       ; // norm of the predictors
-  vec    weights  = as<vec>    (WEIGHTS)     ; // norm of the predictors
-  bool   naive    = as<bool>   (NAIVE)       ; // naive or not (renormalize coefficients?)
-  vec    xty      = as<vec>    (XTY)         ; // reponses to predictors vector
+  vec    weights  = as<vec>    (WEIGHTS)     ; // observation weights (not use at the moment)
+  vec    penscale = as<vec>    (PENSCALE)    ; // penalty weights
+  bool   naive    = as<bool>   (NAIVE)       ; // naive elastic-net or not
+  vec    y        = as<vec>    (Y)           ; // reponse vector
   double eps      = as<double> (EPS)         ; // precision required
-  uword  fun      = as<int>    (FUN)         ; // solver (0=quadra, 1=fista)
+  uword  fun      = as<int>    (FUN)         ; // solver (0=quadra, 1=pathwise, 2=fista)
   int    verbose  = as<int>    (VERBOSE)     ; // int for verbose mode (0/1/2)
+  bool   sparse   = as<bool>   (SPARSE)      ; // boolean for sparse mode
   bool   bullet   = as<bool>   (BULLETPROOF) ; // int for verbose mode (0/1/2)
   uword  max_iter = as<int>    (MAXITER)     ; // max # of iterates of the active set
   uword  max_feat = as<int>    (MAXFEAT)     ; // max # of variables activated
 
-  // Managing dense coding for the design matrix (sparsity is useless here)
-  x = x - sqrt(weights) * trans(xbar)        ; // dense encoding of the design matrix
-  mat xtx = strans(x) * x + lambda2*struc    ; // t(x) * x + lambda2.S
+  vec    xty   ; // reponses to predictors vector
+  vec    xbar  ; // mean of the predictors
+  vec    normx ; // norm of the predictors
+  double normy ; // norm of the response
+  double ybar  ; // mean of the response
+
+  // Managing the data matrix in both cases of sparse or dense coding
+  uword p = xty.n_elem ; // problem size
+  uword n = y.n_elem   ; // sample size
+  mat x        ;
+  mat xt       ;
+  sp_mat sp_x  ;
+  sp_mat sp_xt ;
+  mat xtx      ;
+  if (sparse == 1) { // Check how x is encoded for reading
+    sp_x = as<sp_mat>(X) ;
+    standardize(sp_x, y, intercept, normalize, penscale, xty, normx, normy, xbar, ybar) ;
+    xtx = sp_x.t() * sp_x - n * xbar * xbar.t() + lambda2*struc   ;
+  } else {
+    x = as<mat>(X) ;
+    standardize(x, y, intercept, normalize, penscale, xty, normx, normy, xbar, ybar) ;
+    x  = x - sqrt(weights) * trans(xbar) ;
+    xtx = x.t() * x + lambda2*struc   ;
+  }
+
+  // VECTOR OF TUNING PARAMETER FOR THE L1-PENALTY
+  vec    lambda1   ; // penalty levels
+  uword n_lambda   ; // # of penalty levels
+  double min_ratio ; // ratio to compute the minimum level of penalty
+  if (LAMBDA1 != R_NilValue) {
+    lambda1  = as<vec>(LAMBDA1)  ;
+    n_lambda = lambda1.n_elem    ;
+  } else {
+    n_lambda = as<uword>(N_LAMBDA) ;
+    min_ratio = as<double>(MIN_RATIO);
+    double lmax = max(abs(xty)) ;
+    lambda1 = exp10(linspace(log10(lmax), log10(min_ratio*lmax), n_lambda)) ;
+  }
 
   // Initializing "first level" variables (outside of the lambda1 loop)
-  uword  p        = xty.n_elem             ; // problem size
-  uword  n_lambda = lambda1.n_elem         ; // # of penalty
   colvec beta     = zeros<vec>(p)          ; // vector of current parameters
   uvec   B          (p)                    ; // guys reaching the boundary
   for (int i=0;i<p;i++){B(i) = i;}
@@ -77,7 +128,7 @@ SEXP bounded_reg(SEXP X, SEXP XTY, SEXP STRUCT, SEXP LAMBDA1, SEXP LAMBDA2, SEXP
     if (max_grd[m] < 0) {
       max_grd[m] = 0;
     }
-    
+
     while ((max_grd[m] > eps) && (it_active[m] <= max_iter)) {
       // _____________________________________________________________
       //
@@ -108,13 +159,13 @@ SEXP bounded_reg(SEXP X, SEXP XTY, SEXP STRUCT, SEXP LAMBDA1, SEXP LAMBDA2, SEXP
 	  if (bullet) {
 	    if (verbose > 0) {
 	      Rprintf("\nEntering 'bulletproof' mode: switching to proximal algorithm (slower but safer).");
-	    } 
+	    }
 	    it_active[m] = 0; // start this lambda all the way back
 	    eps = 1e-2 ; // with the proximal settings
 	    fun = 1 ;
 	    it_optim[nbr_opt] = fista_breg(beta, xtx, xty, grd, lambda1[m], L, pow(eps,2));
 	    // reformating the output
-	    B    = find(abs(abs(beta) - max(abs(beta))) < ZERO );	    
+	    B    = find(abs(abs(beta) - max(abs(beta))) < ZERO );
 	  } else {
 	    if (verbose > 0) {
 	      Rprintf("\nCutting the solution path to this point, as you specified bulletproof=FALSE.");
@@ -124,7 +175,7 @@ SEXP bounded_reg(SEXP X, SEXP XTY, SEXP STRUCT, SEXP LAMBDA1, SEXP LAMBDA2, SEXP
 	}
       }
       nbr_opt++;
-	    
+
       // _____________________________________________________________
       //
       // (2) OPTIMALITY TESTING
@@ -135,11 +186,11 @@ SEXP bounded_reg(SEXP X, SEXP XTY, SEXP STRUCT, SEXP LAMBDA1, SEXP LAMBDA2, SEXP
       if (max_grd[m] < 0) {
 	max_grd[m] = 0;
       }
-      
+
       // Moving to the next iterate
       it_active[m]++;
 
-      // Cutting the path here if fail to converge or 
+      // Cutting the path here if fail to converge or
       if (!success_optim) {
 	break;
       }
@@ -178,13 +229,15 @@ SEXP bounded_reg(SEXP X, SEXP XTY, SEXP STRUCT, SEXP LAMBDA1, SEXP LAMBDA2, SEXP
       iB = join_cols(iB, m*ones(B.n_elem,1) );
       jB = join_cols(jB, conv_to<mat>::from(B) );
     }
-    
+
   }
   // END OF THE LOOP OVER LAMBDA
-  
+
   return List::create(Named("coefficients") = strans(coef),
 		      Named("iB")           = iB          ,
 		      Named("jB")           = jB          ,
+		      Named("meanx")        = xbar % normx % weights,
+		      Named("normx")        = normx    ,
 		      Named("lambda1")      = lambda1     ,
 		      Named("it.active")    = it_active   ,
 		      Named("it.optim")     = it_optim    ,

@@ -96,6 +96,7 @@
 ##'
 ##' @importFrom stats fitted predict residuals deviance
 ##'
+setClassUnion("strClass", c("Matrix","NULL"))
 setClass("quadrupen",
   representation = representation(
      coefficients  = "Matrix"   ,
@@ -111,7 +112,7 @@ setClass("quadrupen",
      naive         = "logical"  ,
      lambda1       = "numeric"  ,
      lambda2       = "numeric"  ,
-     struct        = "Matrix"   ,
+     struct        = "strClass" ,
      control       = "list"     ,
      monitoring    = "list")
 )
@@ -286,13 +287,7 @@ setMethod("predict", "quadrupen", definition =
      if (is.null(newx)) {
        return(object@fitted)
      } else {
-       if (length(object@intercept) != 1) {
-         intercept <- matrix(rep(t(object@intercept), nrow(newx)),
-                             nrow=nrow(newx), byrow=TRUE)
-         return(intercept + newx %*% t(object@coefficients))
-       } else {
-         return(newx %*% t(object@coefficients))
-       }
+       return(sweep(newx %*% t(object@coefficients),2L,-object@mu,check.margin=FALSE))
      }
    }
 )
