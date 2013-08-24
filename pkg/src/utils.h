@@ -20,6 +20,35 @@ inline vec signs(vec x) {
   }
   return(signs);
 }
+
+inline vec  get_lambda1(SEXP LAMBDA1, SEXP N_LAMBDA, SEXP MIN_RATIO, double lmax) {
+  vec lambda1 ;
+  if (LAMBDA1 != R_NilValue) {
+    lambda1  = as<vec>(LAMBDA1)  ;
+  } else {
+    uword n_lambda = as<uword>(N_LAMBDA) ;
+    double min_ratio = as<double>(MIN_RATIO);
+    lambda1 = exp10(linspace(log10(lmax), log10(min_ratio*lmax), n_lambda)) ;
+  }
+  return(lambda1);
+}
+
+inline sp_mat get_struct(SEXP STRUCT, double lambda2, vec penscale) {
+  uword p = penscale.n_elem;
+  sp_mat S;
+  if (STRUCT == R_NilValue | lambda2 == 0) {
+    S = speye(p,p);
+  } else {
+    S = as<sp_mat> (STRUCT) ;
+  }
+  if (lambda2 > 0) {
+    // renormalize the l2 structuring matrix according to the l1
+    // penscale values, so as it does not interfer with the l2 penalty.
+    S = diagmat(sqrt(lambda2)*pow(penscale,-1/2)) * S * diagmat(sqrt(lambda2)*pow(penscale,-1/2)) ;
+  }
+  return(S) ;
+}
+
 vec  cg(mat A, vec b, vec x, double tol) ;
 vec pcg(mat A, mat P, vec b, vec x, double tol) ;
 

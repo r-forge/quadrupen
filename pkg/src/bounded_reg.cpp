@@ -35,7 +35,6 @@ SEXP bounded_reg(SEXP X        ,
   // Reading input variables
   bool intercept  = as<bool>   (INTERCEPT)   ; // boolean for intercept mode
   bool normalize  = as<bool>   (NORMALIZE)   ; // boolean for standardizing the predictor
-  sp_mat  struc   = as<sp_mat> (STRUCT)      ; // the structuring matrix
   double lambda2  = as<double> (LAMBDA2)     ; // penalty levels
   vec    weights  = as<vec>    (WEIGHTS)     ; // observation weights (not use at the moment)
   vec    penscale = as<vec>    (PENSCALE)    ; // penalty weights
@@ -49,15 +48,17 @@ SEXP bounded_reg(SEXP X        ,
   uword  max_iter = as<int>    (MAXITER)     ; // max # of iterates of the active set
   uword  max_feat = as<int>    (MAXFEAT)     ; // max # of variables activated
 
+
   vec    xty   ; // reponses to predictors vector
   vec    xbar  ; // mean of the predictors
+  vec    meanx ; // mean of the predictors (rescaled)
   vec    normx ; // norm of the predictors
   double normy ; // norm of the response
   double ybar  ; // mean of the response
+  uword n      ; // sample size
+  uword p      ; // problem size
 
   // Managing the data matrix in both cases of sparse or dense coding
-  uword p = xty.n_elem ; // problem size
-  uword n = y.n_elem   ; // sample size
   mat x        ;
   mat xt       ;
   sp_mat sp_x  ;
@@ -66,27 +67,28 @@ SEXP bounded_reg(SEXP X        ,
   if (sparse == 1) { // Check how x is encoded for reading
     sp_x = as<sp_mat>(X) ;
     standardize(sp_x, y, intercept, normalize, penscale, xty, normx, normy, xbar, ybar) ;
-    xtx = sp_x.t() * sp_x - n * xbar * xbar.t() + lambda2*struc   ;
+    sp_xt = sp_x.t() ;
+    n = sp_x.n_rows ;
+    p = sp_x.n_cols ;
+    xtx = sp_xt * sp_x - n * xbar * xbar.t()  ;
   } else {
     x = as<mat>(X) ;
     standardize(x, y, intercept, normalize, penscale, xty, normx, normy, xbar, ybar) ;
     x  = x - sqrt(weights) * trans(xbar) ;
-    xtx = x.t() * x + lambda2*struc   ;
+    xt = x.t();
+    n = x.n_rows ;
+    p = x.n_cols ;
+    xtx = xt * x ;
   }
+  meanx = xbar % penscale % normx;
+
+  // STRUCTURATING MATRIX
+  sp_mat S = get_struct(STRUCT, lambda2, penscale) ; // sparsely encoded structuring matrix
+  xtx += S ; // S is scaled by lambda2
 
   // VECTOR OF TUNING PARAMETER FOR THE L1-PENALTY
-  vec    lambda1   ; // penalty levels
-  uword n_lambda   ; // # of penalty levels
-  double min_ratio ; // ratio to compute the minimum level of penalty
-  if (LAMBDA1 != R_NilValue) {
-    lambda1  = as<vec>(LAMBDA1)  ;
-    n_lambda = lambda1.n_elem    ;
-  } else {
-    n_lambda = as<uword>(N_LAMBDA) ;
-    min_ratio = as<double>(MIN_RATIO);
-    double lmax = max(abs(xty)) ;
-    lambda1 = exp10(linspace(log10(lmax), log10(min_ratio*lmax), n_lambda)) ;
-  }
+  vec lambda1 = get_lambda1(LAMBDA1, N_LAMBDA, MIN_RATIO, sum(abs(xty)));
+  uword n_lambda = lambda1.n_elem  ; // # of penalty levels
 
   // Initializing "first level" variables (outside of the lambda1 loop)
   colvec beta     = zeros<vec>(p)          ; // vector of current parameters
@@ -94,6 +96,7 @@ SEXP bounded_reg(SEXP X        ,
   for (int i=0;i<p;i++){B(i) = i;}
   mat    coef                              ; // matrice of solution path
   vec    grd                               ; // smooth part of the gradient
+  vec    mu        = zeros<vec>(n_lambda)  ; // the intercept term
   vec    max_grd   = zeros<vec>(n_lambda)  ; // a vector with the successively reach duality gap
   vec    converge  = zeros<vec>(n_lambda)  ; // a vector indicating if convergence occured (0/1/2)
   uvec   it_active = zeros<uvec>(n_lambda) ; // # of loop in the active set for each lambda1
@@ -221,24 +224,35 @@ SEXP bounded_reg(SEXP X        ,
       timing      =    timing.subvec(0,m)    ;
       break;
     } else {
-      if (naive == 1) {
-	coef = join_rows(coef,beta/normx);
+      if (any(penscale != 1)) {
+	coef = join_rows(coef,beta/(normx % penscale));
       } else {
-	coef = join_rows(coef,(1+lambda2)*beta/normx);
+	coef = join_rows(coef,beta/normx);
       }
       iB = join_cols(iB, m*ones(B.n_elem,1) );
       jB = join_cols(jB, conv_to<mat>::from(B) );
+      if (intercept == 1) {
+	mu[m] = dot(beta, xbar) ;
+      }
     }
 
   }
   // END OF THE LOOP OVER LAMBDA
 
+  if (!naive) {
+    coef *= 1+lambda2;
+    mu = ybar - (1+lambda2) * mu;
+  } else {
+    mu = ybar - mu;
+  }
+
   return List::create(Named("coefficients") = strans(coef),
 		      Named("iB")           = iB          ,
 		      Named("jB")           = jB          ,
-		      Named("meanx")        = xbar % normx % weights,
+		      Named("mu")           = mu       ,
+		      Named("meanx")        = meanx    ,
 		      Named("normx")        = normx    ,
-		      Named("lambda1")      = lambda1     ,
+		      Named("lambda1")      = lambda1  ,
 		      Named("it.active")    = it_active   ,
 		      Named("it.optim")     = it_optim    ,
 		      Named("max.grd")      = max_grd     ,

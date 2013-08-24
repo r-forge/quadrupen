@@ -2,6 +2,9 @@ NEWS/Changelog
 
 0.2-3	(2013-07-xx)
     +   added back the 'normalize' parameter
+    +   standardization is performed within the C++ code
+    +   use of sparse conversion from Matrix to Armadillo
+    +   corrected bug with the 'intercept' and 'residuals' components of the quadrupen class
     +   added more tests in the inst directory
 
 0.2-2	(2013-04-08)

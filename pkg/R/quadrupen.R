@@ -148,10 +148,15 @@
 ##' x <- as.matrix(matrix(rnorm(95*n),n,95) %*% chol(Sigma))
 ##' y <- 10 + x %*% beta + rnorm(n,0,10)
 ##'
+##' ## Structured Elastic.net
+##' p <- ncol(x)
+##' C <- bandSparse(p,k=0:1,diagonals=list(rep(1,p),rep(-1,p-1)))
+##'
 ##' ## This gives a great advantage to the elastic-net
 ##' ## for support recovery
 ##' beta.lasso <- slot(crossval(x,y,lambda2=0 , mc.cores=2) , "beta.min")
 ##' beta.enet  <- slot(crossval(x,y,lambda2=10, mc.cores=2), "beta.min")
+##' beta.struc <- slot(crossval(x,y,lambda2=10, mc.cores=2, struct=t(C) %*% C), "beta.min")
 ##'
 ##' cat("\nFalse positives for the Lasso:", sum(sign(beta) != sign(beta.lasso)))
 ##' cat("\nFalse positives for the Elastic-net:", sum(sign(beta) != sign(beta.enet)))
@@ -190,8 +195,8 @@ elastic.net <- function(x,
   if (checkargs) {
     if (is.data.frame(x))
       x <- as.matrix(x)
-    if(!inherits(x, c("matrix", "Matrix")))
-      stop("x has to be of class 'matrix', 'dgeMatrix' or 'dgCMatrix'.")
+    if(!inherits(x, c("matrix", "dgCMatrix")))
+      stop("x has to be of class 'matrix' or 'dgCMatrix'.")
     if(any(is.na(x)))
       stop("NA value in x not allowed.")
     if(!is.numeric(y))
@@ -215,14 +220,14 @@ elastic.net <- function(x,
         warning("providing beta0 for a serie of l1 penalties mught be inefficient.")
     }
     if(min.ratio < 0)
-      stop("min.ratio must be non negative.")
+        stop("min.ratio must be non negative.")
     if (!is.null(struct)) {
       if (ncol(struct) != p | ncol(struct) != p)
-        stop("struct must be a (square) positive semidefinite matrix.")
+          stop("struct must be a (square) positive semidefinite matrix.")
       if (any(eigen(struct,only.values=TRUE)$values<0))
-        stop("struct must be a (square) positive semidefinite matrix.")
+          stop("struct must be a (square) positive semidefinite matrix.")
       if(!inherits(struct, "dgCMatrix"))
-        struct <- as(struct, "dgCMatrix")
+          struct <- as(struct, "dgCMatrix")
     }
     if (!is.null(beta0)) {
       beta0 <- as.numeric(beta0)
@@ -230,9 +235,9 @@ elastic.net <- function(x,
         stop("beta0 must be a vector with p entries.")
     }
     if (length(max.feat)>1)
-      stop("max.feat must be an integer.")
+        stop("max.feat must be an integer.")
     if(is.numeric(max.feat) & !is.integer(max.feat))
-      max.feat <- as.integer(max.feat)
+        max.feat <- as.integer(max.feat)
   }
 
   return(quadrupen(beta0 = beta0,
@@ -587,7 +592,7 @@ quadrupen <- function(beta0    ,
     out <- .Call("bounded_reg",
                  x,
                  y,
-                 S,
+                 struct,
                  lambda1      ,
                  nlambda1     ,
                  min.ratio    ,
@@ -649,7 +654,7 @@ quadrupen <- function(beta0    ,
     mu <- 0
     fitted <- tcrossprod(x,coefficients)
   }
-  residuals <- sweep(-fitted,2L,-y,check.margin=FALSE)
+  residuals <- apply(fitted,2,function(y.hat) y-y.hat)
 
   return(new("quadrupen",
              coefficients = coefficients   ,

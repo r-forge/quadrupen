@@ -1,4 +1,4 @@
-context("Consistency of the Structured Elastic-net solution path")
+context("Consistency of the Structured Elastic-net (reference is computed via the 'augmented data' approach)")
 
 test_that("Consistency of the structured elastic-net", {
 
@@ -6,7 +6,7 @@ test_that("Consistency of the structured elastic-net", {
 
   get.coef <- function(x,y,intercept=TRUE,normalize=TRUE,C=diag(rep(1,ncol(x)))) {
     lambda2 <- runif(1,0,10)
-    
+
     ## INTERCEPT AND NORMALIZATION TREATMENT
     if (intercept) {
       xbar <- colMeans(x)
@@ -27,7 +27,7 @@ test_that("Consistency of the structured elastic-net", {
 
     ## The reference: augmented data approach
     x.aug <- rbind(xs,sqrt(lambda2)*C)
-    y.aug <- c(ys,rep(0,ncol(x)))    
+    y.aug <- c(ys,rep(0,ncol(x)))
     senet1 <- enet(x.aug,y.aug,intercept=FALSE,normalize=FALSE,lambda=0)
     iols <- length(senet1$penalty)
     lambda1 <- senet1$penalty[-iols]/2
@@ -46,11 +46,10 @@ test_that("Consistency of the structured elastic-net", {
   }
 
   ## PROSTATE DATA SET
-  prostate <- read.table("http://www-stat.stanford.edu/~tibs/ElemStatLearn/datasets/prostate.data")
-  x <- as.matrix(prostate[,1:8])
-  y <- prostate[,9]
+  load("prostate.rda")
+  x <- as.matrix(x)
   p <- ncol(x)
-  
+
   ## Simple Elastic.net: structuring matrix is the indentity
   C <- diag(rep(1,p))
   out <- get.coef(x,y,C=C)
@@ -110,7 +109,7 @@ test_that("Consistency of the structured elastic-net", {
   ## without intercept, without normalization
   out <- get.coef(x,y,intercept=FALSE,normalize=FALSE,C=C)
   expect_that(out$coef.our,is_equivalent_to(out$coef.ref))
-  
+
   ## with intercept, without normalization
   out <- get.coef(x,y,intercept=TRUE,normalize=FALSE,C=C)
   expect_that(out$coef.our,is_equivalent_to(out$coef.ref))

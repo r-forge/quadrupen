@@ -53,6 +53,7 @@ SEXP elastic_net(SEXP BETA0    ,
 
   vec    xty   ; // reponses to predictors vector
   vec    xbar  ; // mean of the predictors
+  vec    meanx ; // mean of the predictors (rescaled)
   vec    normx ; // norm of the predictors
   double normy ; // norm of the response
   double ybar  ; // mean of the response
@@ -78,33 +79,14 @@ SEXP elastic_net(SEXP BETA0    ,
     n = x.n_rows ;
     p = x.n_cols ;
   }
+  meanx = xbar % penscale % normx;
 
   // STRUCTURATING MATRIX
-  sp_mat S ; // sparsely encoded structuring matrix
-  if (STRUCT == R_NilValue | lambda2 == 0) {
-    S = speye(p,p);
-  } else {
-    S = as<sp_mat> (STRUCT) ;
-  }
-  if (lambda2 > 0) {
-    // renormalize the l2 structuring matrix according to the l1
-    // penscale values, so as it does not interfer with the l2 penalty.
-    S = diagmat(sqrt(lambda2)*pow(penscale,-1/2)) * S * diagmat(sqrt(lambda2)*pow(penscale,-1/2)) ;
-  }
+  sp_mat S = get_struct(STRUCT, lambda2, penscale) ; // sparsely encoded structuring matrix
 
   // VECTOR OF TUNING PARAMETER FOR THE L1-PENALTY
-  vec    lambda1   ; // penalty levels
-  uword n_lambda   ; // # of penalty levels
-  double min_ratio ; // ratio to compute the minimum level of penalty
-  if (LAMBDA1 != R_NilValue) {
-    lambda1  = as<vec>(LAMBDA1)  ;
-    n_lambda = lambda1.n_elem    ;
-  } else {
-    n_lambda = as<uword>(N_LAMBDA) ;
-    min_ratio = as<double>(MIN_RATIO);
-    double lmax = max(abs(xty)) ;
-    lambda1 = exp10(linspace(log10(lmax), log10(min_ratio*lmax), n_lambda)) ;
-  }
+  vec lambda1 = get_lambda1(LAMBDA1, N_LAMBDA, MIN_RATIO, max(abs(xty)));
+  uword n_lambda = lambda1.n_elem  ; // # of penalty levels
 
   // Initializing "first level" variables (outside of the lambda1 loop)
   mat  R                                 ; // Cholesky decomposition of XAtXA
@@ -201,9 +183,9 @@ SEXP elastic_net(SEXP BETA0    ,
       // Check if the variable is already in the active set
       if (are_in[var_in] == 0) {
 	if (sparse == 1) {
-	add_var_enet(n, nbr_in, var_in, betaA, A, sp_x, sp_xt, xtxA, xAtxA, xtxw, R, lambda2, xbar, S, usechol, fun) ;
+	  add_var_enet(n, nbr_in, var_in, betaA, A, sp_x, sp_xt, xtxA, xAtxA, xtxw, R, lambda2, xbar, S, usechol, fun) ;
 	} else {
-	add_var_enet(n, nbr_in, var_in, betaA, A, x, xt, xtxA, xAtxA, xtxw, R, lambda2, xbar, S, usechol, fun) ;
+	  add_var_enet(n, nbr_in, var_in, betaA, A, x, xt, xtxA, xAtxA, xtxw, R, lambda2, xbar, S, usechol, fun) ;
 	}
 
 	if (verbose == 2) {Rprintf("newly added variable %i\n",var_in);}
@@ -311,26 +293,25 @@ SEXP elastic_net(SEXP BETA0    ,
       timing      =    timing.subvec(0,m)    ;
       break;
     } else {
-      // Preparing next value of the penalty
       if (any(penscale != 1)) {
-	betaA /= penscale.elem(A);
-      }
-      if (intercept == 1) {
-	mu[m] = - dot(betaA/normx.elem(A),xbar.elem(A) % penscale.elem(A)) ;
-      }
-      if (naive == 1) {
-	nonzeros = join_cols(nonzeros, betaA/normx.elem(A));
-	mu[m] = ybar + mu[m] ;
-      }
-      else {
-	nonzeros = join_cols(nonzeros, (1+lambda2)*betaA/normx.elem(A));
-	mu[m] = ybar + (1+lambda2)*mu[m] ;
+	nonzeros = join_cols(nonzeros, betaA/(normx.elem(A) % penscale.elem(A)));
+      } else {
+	nonzeros = join_cols(nonzeros, betaA/(normx.elem(A)));
       }
       iA = join_cols(iA, m*ones(betaA.n_elem,1) );
       jA = join_cols(jA, conv_to<mat>::from(A) ) ;
+      if (intercept == 1) {
+	mu[m] = dot(betaA, xbar.elem(A)) ;
+      }
     }
   }
   // END OF THE LOOP OVER LAMBDA
+  if (!naive) {
+    nonzeros *= 1+lambda2;
+    mu = ybar - (1+lambda2) * mu;
+  } else {
+    mu = ybar - mu;
+  }
 
   // Updating monitored quantities
   if (monitor > 0) {
@@ -341,7 +322,7 @@ SEXP elastic_net(SEXP BETA0    ,
 		      Named("iA")         = iA       ,
 		      Named("jA")         = jA       ,
 		      Named("mu")         = mu       ,
-		      Named("meanx")      = xbar % normx % penscale,
+		      Named("meanx")      = meanx    ,
 		      Named("normx")      = normx    ,
 		      Named("lambda1")    = lambda1  ,
 		      Named("nbr.in")     = nbr_in   ,
