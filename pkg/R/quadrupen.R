@@ -655,6 +655,8 @@ quadrupen <- function(beta0    ,
     fitted <- tcrossprod(x,coefficients)
   }
   residuals <- apply(fitted,2,function(y.hat) y-y.hat)
+  normy     <- ifelse(intercept,sum((y-mean(y))^2),sum(y^2))
+  r.squared <- 1-colSums(residuals^2)/normy
 
   return(new("quadrupen",
              coefficients = coefficients   ,
@@ -665,6 +667,7 @@ quadrupen <- function(beta0    ,
              normx        = drop(out$normx),
              fitted       = fitted         ,
              residuals    = residuals      ,
+             r.squared    = r.squared      ,
              penscale     = penscale       ,
              penalty      = penalty        ,
              naive        = naive          ,
