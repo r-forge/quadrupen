@@ -18,7 +18,7 @@ int quadra_enet(vec &x0,
   
   uvec A = find(abs(x0) > ZERO) ; // vector of active variables
   vec theta = -sgn_grd   ; // vector of sign of the solution
-  theta.elem(A)   = signs(x0.elem(A));
+  theta.elem(A)   = sign(x0.elem(A));
   
   // Solving the quadratic problem
   vec x1 ;
@@ -29,7 +29,7 @@ int quadra_enet(vec &x0,
   }
   
   // Check for swapping variables
-  uvec swap = find(abs(signs(x1.elem(A)) - theta.elem(A)) > ZERO);
+  uvec swap = find(abs(sign(x1.elem(A)) - theta.elem(A)) > ZERO);
   if (swap.is_empty()) {
     null = swap ; // this is empty
     x0 = x1;
@@ -50,7 +50,7 @@ int quadra_enet(vec &x0,
 
     A = find(abs(x0) > ZERO) ; // vector of active variables
     theta = -sgn_grd        ; // vector of sign of the solution
-    theta.elem(A)   = signs(x0.elem(A));
+    theta.elem(A)   = sign(x0.elem(A));
 
     vec x2 ;
     if (usechol) {
@@ -63,7 +63,7 @@ int quadra_enet(vec &x0,
     // This is the gradient on the active part of the parameters
     vec grd = -xty + xAtxA * x2;
     // if the sign is coherent, keep that one...
-    if (fabs(grd(null[0]) + pen * sign(x2(null[0]))) <= ZERO) {
+    if (fabs(grd(null[0]) + pen * as_scalar(sign(x2(null)))) <= ZERO) {
       null = swap; // this is empty
       x0 = x2 ;
     } else {
@@ -91,7 +91,7 @@ int quadra_breg(vec    &beta,
   uvec I             ; // guys living in between the supremum
   uvec toB           ; // guys reaching the boundary after optimization
   uvec toI           ; // guys leaving the boundary after optimization
-  vec  theta = -signs(grd.elem(B)) ;
+  vec  theta = -sign(grd.elem(B)) ;
 
   vec XX_B   ;
   mat XX     ;
@@ -144,10 +144,10 @@ int quadra_breg(vec    &beta,
     // VARIABLES REACHING THE BOUNDARY
     //
     toB = find(abs(beta) > bound);
-    beta.elem(toB) = bound * signs(beta.elem(toB));
+    beta.elem(toB) = bound * sign(beta.elem(toB));
     B = unique(join_cols(B,toB));
     I = setdiff(all,B);
-    theta = signs(beta.elem(B)); // sign of the guys reaching the supremum
+    theta = sign(beta.elem(B)); // sign of the guys reaching the supremum
   }
 
   grd = -xty + xtx * beta ;
@@ -155,7 +155,7 @@ int quadra_breg(vec    &beta,
   //
   // VARIABLE LEAVING THE BOUDARY
   //
-  toI = find(abs(theta + signs(grd.elem(B))) > zero);
+  toI = find(abs(theta + sign(grd.elem(B))) > zero);
   if (!toI.is_empty()) {
     toI = B.elem(toI);
   }

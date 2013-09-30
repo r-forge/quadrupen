@@ -169,7 +169,7 @@ SEXP elastic_net(SEXP BETA0    ,
     // dual norm of gradient for unactive variable
     grd_norm = abs(grd) - lambda1[m] ;
     // dual norm of gradient for active variables
-    grd_norm.elem(A) = abs(grd.elem(A) + lambda1[m] * signs(betaA)) ;
+    grd_norm.elem(A) = abs(grd.elem(A) + lambda1[m] * sign(betaA)) ;
     // variable associated with the highest optimality violation
     max_grd[m] = grd_norm.max(var_in) ;
     if (max_grd[m] < 0) {max_grd[m] = 0;}
@@ -211,7 +211,7 @@ SEXP elastic_net(SEXP BETA0    ,
 	break;
       default:
 	try {
-	  it_optim[nbr_opt] = quadra_enet(betaA, R, xAtxA, xty.elem(A), signs(grd.elem(A)), lambda1[m], null, usechol, eps);
+	  it_optim[nbr_opt] = quadra_enet(betaA, R, xAtxA, xty.elem(A), sign(grd.elem(A)), lambda1[m], null, usechol, eps);
 	} catch (std::runtime_error &error) {
 	  if (verbose > 0) {
 	    Rprintf("\nWarning: singular system at this stage of the solution path, cutting here.\n");
@@ -244,7 +244,7 @@ SEXP elastic_net(SEXP BETA0    ,
       // dual norm of gradient for unactive variable
       grd_norm = abs(grd) - lambda1[m] ;
       // dual norm of gradient for active variables
-      grd_norm.elem(A) = abs(grd.elem(A) + lambda1[m] * signs(betaA)) ;
+      grd_norm.elem(A) = abs(grd.elem(A) + lambda1[m] * sign(betaA)) ;
       // variable associated with the highest optimality violation
       max_grd[m]  = grd_norm.max(var_in) ;
       if (max_grd[m] < 0) {max_grd[m] = 0;}
