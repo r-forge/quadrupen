@@ -61,6 +61,10 @@
 ##' \item{\code{residuals}:}{Matrix of residuals, each column
 ##' corresponding to a value of \code{lambda1}.}
 ##'
+##' \item{\code{df}:}{Estimated degree of freedoms for the successive
+##' \code{lambda1}.  Only available for 'elastic.net' using tCholesky
+##' factorization.}
+##'
 ##' \item{\code{r.squared}:}{Vector (class \code{"numeric"}) given the
 ##' coefficient of determination as a function of lambda1.}
 ##'
@@ -111,6 +115,7 @@ setClass("quadrupen",
      normx         = "numeric"  ,
      fitted        = "mat"      ,
      residuals     = "mat"      ,
+     df            = "numeric"  ,
      r.squared     = "numeric"  ,
      penscale      = "numeric"  ,
      penalty       = "character",

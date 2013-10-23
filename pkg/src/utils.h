@@ -40,6 +40,8 @@ inline sp_mat get_struct(SEXP STRUCT, double lambda2, vec penscale) {
   return(S) ;
 }
 
+double get_df(double &lambda2, mat &R, mat &xAtxA, sp_mat &S, uvec &A, uword &fun) ;
+
 vec  cg(mat A, vec b, vec x, double tol) ;
 vec pcg(mat A, mat P, vec b, vec x, double tol) ;
 
@@ -53,7 +55,7 @@ void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat
 
 void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, sp_mat &x, sp_mat &xt, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, double &lambda2, vec &xbar, sp_mat &spS, bool &usechol, uword &fun) ;
 
-void remove_var_enet(int &nbr_in, uvec &are_in, vec &betaA, uvec &A, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R,  uvec &null, bool &usechol, uword &fun) ;
+void remove_var_enet(int &nbr_in, uvec &are_in, vec &betaA, uvec &A, mat &xtxAS, mat &xAtxA, mat &xtxw, mat &R,  uvec &null, bool &usechol, uword &fun) ;
 
 template <typename any_mat>
 void standardize(any_mat &x, vec &y, bool &intercept, bool &normalize, vec &penscale,

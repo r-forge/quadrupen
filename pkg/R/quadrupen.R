@@ -646,10 +646,12 @@ quadrupen <- function(beta0    ,
   dimnames(coefficients)[[1]] <- round(c(out$lambda1),3)
   dimnames(coefficients)[[2]] <- 1:p
   mu <- drop(out$mu)
+  df <- drop(out$df)
 
   ## FITTED VALUES AND RESIDUALS...
   if (intercept) {
     fitted <- sweep(tcrossprod(x,coefficients),2L,-mu,check.margin=FALSE)
+    df <- df + 1
   } else {
     mu <- 0
     fitted <- tcrossprod(x,coefficients)
@@ -667,6 +669,7 @@ quadrupen <- function(beta0    ,
              normx        = drop(out$normx),
              fitted       = fitted         ,
              residuals    = residuals      ,
+             df           = df             ,
              r.squared    = r.squared      ,
              penscale     = penscale       ,
              penalty      = penalty        ,

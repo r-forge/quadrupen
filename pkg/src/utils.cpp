@@ -44,6 +44,35 @@ void choldowndate(mat &R, int j) {
   R.shed_row(p);
 }
 
+double get_df(double &lambda2, mat &R, mat &xAtxA, sp_mat &S, uvec &A, uword &fun) {
+
+  mat SAA(A.n_elem,A.n_elem) ;
+  double df ;
+  mat B ;
+
+  if (lambda2 > 0) {
+    if (fun == 0) {
+      B = solve(trimatu(R), eye(R.n_cols, R.n_cols));
+      B = B * B.t();
+    } else {
+      B = inv(sympd(xAtxA));
+    }
+    // have to do this due to sparse encoding
+    // either wait for Armadillo's guy to develop non contiguous
+    // subview for sparse matrice or iterate over the n_zeros only...
+    for (int i=0;i<A.n_elem;i++){
+      for (int j=i;j<A.n_elem;j++){
+	SAA(i,j) = S.at(A(i),A(j));
+	SAA(j,i) = SAA(i,j);
+      }
+    }
+    df = A.n_elem - sum(mat(SAA * B).diag()); // trace does not work, don't know why
+  } else {
+    df = A.n_elem;
+  }
+
+  return(df);
+}
 
 void add_var_enet(uword &n, int &nbr_in, uword &var_in, vec &betaA, uvec &A, mat &x, mat &xt, mat &xtxA, mat &xAtxA, mat &xtxw, mat &R, double &lambda2, vec &xbar, sp_mat &spS, bool &usechol, uword &fun) {
 

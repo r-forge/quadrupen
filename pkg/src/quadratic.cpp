@@ -15,11 +15,11 @@ int quadra_enet(vec &x0,
 		double tol) {
 
   uword iter = 1; // current iterate
-  
+
   uvec A = find(abs(x0) > ZERO) ; // vector of active variables
   vec theta = -sgn_grd   ; // vector of sign of the solution
   theta.elem(A)   = sign(x0.elem(A));
-  
+
   // Solving the quadratic problem
   vec x1 ;
   if (usechol) {
@@ -27,7 +27,7 @@ int quadra_enet(vec &x0,
   } else {
     x1 = cg(xAtxA, xty - pen*theta, x0, tol) ;
   }
-  
+
   // Check for swapping variables
   uvec swap = find(abs(sign(x1.elem(A)) - theta.elem(A)) > ZERO);
   if (swap.is_empty()) {

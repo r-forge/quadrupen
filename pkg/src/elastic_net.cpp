@@ -83,6 +83,7 @@ SEXP elastic_net(SEXP BETA0    ,
 
   // STRUCTURATING MATRIX
   sp_mat S = get_struct(STRUCT, lambda2, penscale) ; // sparsely encoded structuring matrix
+  mat SAA ; // densely encoded active counterpart
 
   // VECTOR OF TUNING PARAMETER FOR THE L1-PENALTY
   vec lambda1 = get_lambda1(LAMBDA1, N_LAMBDA, MIN_RATIO, max(abs(xty)));
@@ -93,7 +94,7 @@ SEXP elastic_net(SEXP BETA0    ,
   uvec A                                 ; // set of currently activated variables
   vec  betaA                             ; // vector of currently activated parameters
   mat  xtxA                              ; // t(x) * x_A  covariance matrix
-  mat  xAtxA                             ; // t(x_A) * x_A covariance matrix of the activated variable
+  mat  xAtxA                             ; // t(x_A) * x_A + S covariance matrix of the activated variable plus SAA matrix
   vec  xtxw                              ; // t(x_A) * x_A * beta(A)
   vec  grd       = -xty                  ; // smooth part of the gradient
   vec  mu        = zeros<vec>(n_lambda)  ; // the intercept term
@@ -104,6 +105,7 @@ SEXP elastic_net(SEXP BETA0    ,
   uvec it_optim                          ; // # of loop in the optimization process for each loop of the active se
   double L0            = 1.0 + lambda2   ; // Lipschitz constant for proximal methods
   vec  timing      (n_lambda)            ; // succesive timing in
+  vec  df          (n_lambda)            ; // degrees of freedom
   wall_clock timer                       ; // clock
 
   // Initializing "second level" variables (within the active set - for a fixed value of lamdba)
@@ -138,7 +140,7 @@ SEXP elastic_net(SEXP BETA0    ,
       }
     }
     grd += xtxA * betaA    ;
-    nbr_in = A.n_elem;
+    nbr_in = A.n_elem      ;
     xAtxA = xtxA.rows(A)   ;
     if (fun == 0 & usechol) {
       R = chol(xAtxA) ;
@@ -263,6 +265,9 @@ SEXP elastic_net(SEXP BETA0    ,
       R_CheckUserInterrupt();
     }
 
+    // degress of freedom
+    df[m] = get_df(lambda2, R, xAtxA, S, A, fun);
+
     // the reference parameter (obtained once optimum is met)
     if (monitor > 0) {
       if (it_active[m] > 0) {
@@ -291,6 +296,7 @@ SEXP elastic_net(SEXP BETA0    ,
       max_grd     =   max_grd.subvec(0,m-1)  ;
       it_active   = it_active.subvec(0,m)    ;
       timing      =    timing.subvec(0,m)    ;
+      df          =    df.subvec(0,m)        ;
       break;
     } else {
       if (any(penscale != 1)) {
@@ -325,6 +331,7 @@ SEXP elastic_net(SEXP BETA0    ,
 		      Named("meanx")      = meanx    ,
 		      Named("normx")      = normx    ,
 		      Named("lambda1")    = lambda1  ,
+		      Named("df")         = df       ,
 		      Named("nbr.in")     = nbr_in   ,
 		      Named("it.active")  = it_active,
 		      Named("it.optim")   = it_optim ,
