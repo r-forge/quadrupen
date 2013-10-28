@@ -319,3 +319,46 @@ setMethod("deviance", "quadrupen", definition =
      return(dev)
    }
 )
+
+setMethod("deviance", "quadrupen", definition =
+   function(object, newx=NULL, newy=NULL, ...) {
+     dev <- colSums(residuals(object, newx, newy)^2)
+     return(dev)
+   }
+)
+
+setGeneric("pen.criterion", function(object, penalty=2, sigma=NULL)
+           {standardGeneric("pen.criterion")})
+
+setMethod("pen.criterion", "quadrupen", definition =
+   function(object, penalty=2, sigma=NULL) {
+
+     n <- nrow(residuals(object))
+     if (is.null(sigma)) {
+       crit <- n*log(deviance(object)) + penalty * object@df
+     } else {
+       crit <- deviance(object)/n + penalty * object@df/ n * sigma^2
+     }
+
+     ## AIC: pen = 2
+     ## BIC: pen = log(n)
+     betas <- as.matrix(object@coefficients)
+     if (penalty == 2) {
+       penalty <- "AIC"
+     } else if (penalty == log(ncol(betas))) {
+       penalty <- "BIC"
+     } else {
+       penalty <- "custom"
+     }
+
+     return(new("critpen",
+             fraction    = apply(abs(betas),1,sum)/max(apply(abs(betas),1,sum)),
+             df          = object@df,
+             lambda1     = object@lambda1,
+             criterion   = crit,
+             penalty     = penalty,
+             beta.min    = betas[which.min(crit),],
+             lambda1.min = object@lambda1[which.min(crit)]))
+
+   }
+)
