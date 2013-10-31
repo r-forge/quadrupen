@@ -40,7 +40,8 @@ inline sp_mat get_struct(SEXP STRUCT, double lambda2, vec penscale) {
   return(S) ;
 }
 
-double get_df(double &lambda2, mat &R, mat &xAtxA, sp_mat &S, uvec &A, uword &fun) ;
+double get_df_enet(double &lambda2, mat &R, mat &xAtxA, sp_mat &S, uvec &A, uword &fun) ;
+double get_df_breg(double &lambda2, mat &xtx, sp_mat &S, uvec &A) ;
 
 vec  cg(mat A, vec b, vec x, double tol) ;
 vec pcg(mat A, mat P, vec b, vec x, double tol) ;

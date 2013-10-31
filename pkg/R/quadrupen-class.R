@@ -154,6 +154,40 @@ setMethod("show", "quadrupen", definition =
    function(object) {print(object)}
 )
 
+setMethod("fitted", "quadrupen", definition =
+   function(object, ...) {
+     return(object@fitted)
+   }
+)
+
+setMethod("predict", "quadrupen", definition =
+   function (object, newx=NULL, ...)  {
+     if (is.null(newx)) {
+       return(object@fitted)
+     } else {
+       return(sweep(newx %*% t(object@coefficients),2L,-object@mu,check.margin=FALSE))
+     }
+   }
+)
+
+setMethod("residuals", "quadrupen", definition =
+   function(object, newx=NULL, newy=NULL, ...) {
+     if (is.null(newx) | is.null(newy)) {
+       return(object@residuals)
+     } else {
+       n <- length(object@lambda1)
+       return(matrix(rep(newy, n), ncol=n) - predict(object, newx))
+     }
+   }
+)
+
+setMethod("deviance", "quadrupen", definition =
+   function(object, newx=NULL, newy=NULL, ...) {
+     dev <- colSums(residuals(object, newx, newy)^2)
+     return(dev)
+   }
+)
+
 ##' Plot method for a quadrupen object
 ##'
 ##' Produce a plot of the solution path of a \code{quadrupen} fit.
@@ -221,7 +255,7 @@ setMethod("show", "quadrupen", definition =
 ##'
 ##' @importFrom graphics plot
 ##' @exportMethod plot
-##' @import ggplot2 scales grid
+##' @import ggplot2 scales grid methods
 ##' @export
 setMethod("plot", "quadrupen", definition =
    function(x, y, xvar = "lambda",
@@ -286,79 +320,157 @@ setMethod("plot", "quadrupen", definition =
    }
 )
 
-setMethod("fitted", "quadrupen", definition =
-   function(object, ...) {
-     return(object@fitted)
-   }
-)
 
-setMethod("predict", "quadrupen", definition =
-   function (object, newx=NULL, ...)  {
-     if (is.null(newx)) {
-       return(object@fitted)
-     } else {
-       return(sweep(newx %*% t(object@coefficients),2L,-object@mu,check.margin=FALSE))
-     }
-   }
-)
+##' Penalized criteria based on estimation of degrees of freedom
+##'
+##' Produce a plot or send back the values of some penalized criteria
+##' accompanied with the vector(s) of parameters selected
+##' accordingly. The default behavior plots the BIC and the AIC (with
+##' respective factor \eqn{\log(n)}{log(n)} and \eqn{2}{2}) yet the user can specify any
+##' penalty.
+##'
+##' @usage criteria(object, penalty=setNames(c(2, log(p)), c("AIC","BIC")), sigma=NULL,
+##'            log.scale=TRUE, xvar = "lambda", plot=TRUE)
+##' 
+##' @param object output of a fitting procedure of the \pkg{quadrupen}
+##' package (e.g. \code{\link{elastic.net}}). Must be of class
+##' \code{quadrupen}.
+##' @param penalty a vector with as many penalties a desired. The
+##' default contains the penalty corresponding to the AIC and the BIC
+##' (\eqn{2}{2} and \eqn{\log(n)}{log(n)}). Setting the "names"
+##' attribute, as done in the default definition, leads to outputs
+##' which are easier to read.
+##' @param sigma scalar: an estimate of the residual variance. When
+##' available, it is plugged-in the criteria, which may be more
+##' relevant. If \code{NULL} (the default), it is estimated as usual
+##' (see details).
+##' @param xvar variable to plot on the X-axis: either \code{"df"}
+##' (the estimated degrees of freedom), \code{"lambda"}
+##' (\eqn{\lambda_1}{lambda1} penalty level) or \code{"fraction"}
+##' (\eqn{\ell_1}{l1}-norm of the coefficients). Default is set to
+##' \code{"lambda"}.
+##' @param log.scale logical; indicates if a log-scale should be used
+##' when \code{xvar="lambda"}. Default is \code{TRUE}.
+##' @param plot logical; indicates if the graph should be plotted on
+##' call. Default is \code{TRUE}.
+##'
+##' @return When \code{plot} is set to \code{TRUE}, an invisible
+##' \pkg{ggplot2} object is returned, which can be plotted via the
+##' \code{print} method. On the other hand, a list with a two data
+##' frames containing the criteria and the chosen vector of parameters
+##' are returned.
+##' @seealso \code{\linkS4class{quadrupen}}.
+##'
+##' @note When \code{sigma} is provided, the criterion takes the form
+##'
+##' \if{latex}{\deqn{\left\|\mathbf{y} - \mathbf{X} \hat{\beta} \right\|^2 +
+##' \mathrm{penalty} \times \frac{\hat{\mathrm{df}}}{n} \ \sigma^2.}}
+##' \if{html}{\out{ <center> RSS + penalty * df / n * sigma<sup>2</sup> </center>}}
+##' \if{text}{\deqn{RSS + penalty * df / n * sigma^2}}
+##'
+##' When it is unknown, it writes
+##'
+##' \if{latex}{\deqn{\log\left(\left\|\mathbf{y} - \mathbf{X} \hat{\beta} \right\|^2\right) +
+##' \mathrm{penalty} \times \hat{\mathrm{df}}.}}
+##' \if{html}{\out{ <center> n*log(RSS) + penalty * df </center>}}
+##' \if{text}{\deqn{n*log(RSS) + penalty * df}}
+##'
+##' Estimation of the degrees of freedom (for the elastic-net, the
+##' LASSO and also bounded regression) are computed by applying and
+##' adpating the results of Tibshirani and Taylor (see references
+##' below).
+##'
+##' @references Ryan Tibshirani and Jonathan Taylor. Degrees of
+##' freedom in lasso problems, Annals of Statistics, 40(2) 2012.
+##' 
+##' @name criteria,quadrupen-method
+##' @aliases criteria,quadrupen-method
+##' @aliases criteria.quadrupen
+##' @aliases criteria
+##' @docType methods
+##' @rdname criteria.quadrupen
+##'
+##' @examples \dontrun{
+##' ## Simulating multivariate Gaussian with blockwise correlation
+##' ## and piecewise constant vector of parameters
+##' beta <- rep(c(0,1,0,-1,0), c(25,10,25,10,25))
+##' cor <- 0.75
+##' Soo <- toeplitz(cor^(0:(25-1))) ## Toeplitz correlation for irrelevant variables
+##' Sww  <- matrix(cor,10,10) ## bloc correlation between active variables
+##' Sigma <- bdiag(Soo,Sww,Soo,Sww,Soo)
+##' diag(Sigma) <- 1
+##' n <- 50
+##' x <- as.matrix(matrix(rnorm(95*n),n,95) %*% chol(Sigma))
+##' y <- 10 + x %*% beta + rnorm(n,0,10)
+##'
+##' ## Plot penalized criteria for the Elastic-net path
+##' criteria(elastic.net(x,y, lambda2=1))
+##'
+##' ##' Plot penalized criteria for the Bounded regression
+##' criteria(bounded.reg(x,y, lambda2=1))
+##' }
+##'
+##' @import ggplot2 reshape2 scales grid methods
+##' @exportMethod criteria
+setGeneric("criteria", function(object, penalty=setNames(c(2, log(ncol(object@coefficients))), c("AIC","BIC")), sigma=NULL,
+            log.scale=TRUE, xvar = "lambda", plot=TRUE)
+           {standardGeneric("criteria")})
 
-setMethod("residuals", "quadrupen", definition =
-   function(object, newx=NULL, newy=NULL, ...) {
-     if (is.null(newx) | is.null(newy)) {
-       return(object@residuals)
-     } else {
-       n <- length(object@lambda1)
-       return(matrix(rep(newy, n), ncol=n) - predict(object, newx))
-     }
-   }
-)
-
-setMethod("deviance", "quadrupen", definition =
-   function(object, newx=NULL, newy=NULL, ...) {
-     dev <- colSums(residuals(object, newx, newy)^2)
-     return(dev)
-   }
-)
-
-setMethod("deviance", "quadrupen", definition =
-   function(object, newx=NULL, newy=NULL, ...) {
-     dev <- colSums(residuals(object, newx, newy)^2)
-     return(dev)
-   }
-)
-
-setGeneric("pen.criterion", function(object, penalty=2, sigma=NULL)
-           {standardGeneric("pen.criterion")})
-
-setMethod("pen.criterion", "quadrupen", definition =
-   function(object, penalty=2, sigma=NULL) {
-
+setMethod("criteria", "quadrupen", definition =
+   function(object, penalty=setNames(c(2, log(ncol(object@coefficients))), c("AIC","BIC")), sigma=NULL,
+            log.scale=TRUE, xvar = "lambda", plot=TRUE) {
+     
+     betas <- object@coefficients
+     
      n <- nrow(residuals(object))
+     p <- ncol(betas)
+     
+     ## compute the penalized criteria
      if (is.null(sigma)) {
-       crit <- n*log(deviance(object)) + penalty * object@df
+       crit <- sapply(penalty, function(pen) n*log(deviance(object)) + pen * object@df)
      } else {
-       crit <- deviance(object)/n + penalty * object@df/ n * sigma^2
+       crit <- sapply(penalty, function(pen) deviance(object)/n + pen * object@df/ n * sigma^2)
      }
-
-     ## AIC: pen = 2
-     ## BIC: pen = log(n)
-     betas <- as.matrix(object@coefficients)
-     if (penalty == 2) {
-       penalty <- "AIC"
-     } else if (penalty == log(ncol(betas))) {
-       penalty <- "BIC"
+     
+     ## put together all relevant information about those criteria
+     criterion <- data.frame(crit, df=object@df, lambda=object@lambda1,
+                             fraction = apply(abs(betas),1,sum)/max(apply(abs(betas),1,sum)))
+     rownames(criterion) <- 1:nrow(criterion)
+     
+     ## recover the associated vectors of parameters
+     beta.min  <- t(betas[apply(crit, 2, which.min), ])
+     if (!is.null(dim(beta.min)))
+       colnames(beta.min) <- names(penalty)
+     
+     ## plot the critera, if required
+     if (plot) {
+       
+       if (length(object@lambda1) == 1) {
+         stop("Not available when length(lambda1) == 1")
+       }
+       
+       data.plot <- melt(criterion, id=xvar, measure=1:length(penalty), variable.name="criterion")
+       colnames(data.plot)[1] <- "xvar"
+       
+       xlab <- switch(xvar,
+                      "fraction" = expression(paste("|",beta[lambda[1]],"|",{}[1]/max[lambda[1]],"|",beta[lambda[1]],"|",{}[1],sep="")),
+                      "df" = "Estimated degrees of freedom",
+                      ifelse(log.scale,expression(log[10](lambda[1])),expression(lambda[1])))
+       
+       d <- ggplot(data.plot, aes(x=xvar, y=value, colour=criterion, group=criterion)) +
+         geom_line(aes(x=xvar,y=value)) + geom_point(aes(x=xvar,y=value)) +
+           labs(x=xlab, y="criterion's value",
+                title=paste("Information Criteria for a", slot(object, "penalty"),"fit"))
+       
+       if (log.scale & xvar=="lambda") {
+         d <- d + scale_x_log10()
+       }
+       print(d)
+       return(invisible(d))
      } else {
-       penalty <- "custom"
+       return(list(criterion=criterion, beta.min=beta.min))
      }
+     
+     return(list(criterion=criterion, beta.min=beta.min))
+   })
 
-     return(new("critpen",
-             fraction    = apply(abs(betas),1,sum)/max(apply(abs(betas),1,sum)),
-             df          = object@df,
-             lambda1     = object@lambda1,
-             criterion   = crit,
-             penalty     = penalty,
-             beta.min    = betas[which.min(crit),],
-             lambda1.min = object@lambda1[which.min(crit)]))
-
-   }
-)

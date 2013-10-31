@@ -44,7 +44,7 @@ void choldowndate(mat &R, int j) {
   R.shed_row(p);
 }
 
-double get_df(double &lambda2, mat &R, mat &xAtxA, sp_mat &S, uvec &A, uword &fun) {
+double get_df_enet(double &lambda2, mat &R, mat &xAtxA, sp_mat &S, uvec &A, uword &fun) {
 
   mat SAA(A.n_elem,A.n_elem) ;
   double df ;
@@ -67,6 +67,31 @@ double get_df(double &lambda2, mat &R, mat &xAtxA, sp_mat &S, uvec &A, uword &fu
       }
     }
     df = A.n_elem - sum(mat(SAA * B).diag()); // trace does not work, don't know why
+  } else {
+    df = A.n_elem;
+  }
+
+  return(df);
+}
+
+double get_df_breg(double &lambda2, mat &xtx, sp_mat &S, uvec &A) {
+
+  double df ;
+  mat C     ;
+  mat SAA(A.n_elem,A.n_elem) ;
+
+  if (lambda2 > 0) {
+    C = inv(sympd(xtx.submat(A,A)));
+    // have to do this due to sparse encoding
+    // either wait for Armadillo's guy to develop non contiguous
+    // subview for sparse matrice or iterate over the n_zeros only...
+    for (int i=0;i<A.n_elem;i++){
+      for (int j=i;j<A.n_elem;j++){
+	SAA(i,j) = S.at(A(i),A(j));
+	SAA(j,i) = SAA(i,j);
+      }
+    }
+    df = A.n_elem - sum(mat(SAA * C).diag()); // trace does not work, don't know why
   } else {
     df = A.n_elem;
   }

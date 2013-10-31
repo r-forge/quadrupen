@@ -92,8 +92,10 @@ SEXP bounded_reg(SEXP X        ,
 
   // Initializing "first level" variables (outside of the lambda1 loop)
   colvec beta     = zeros<vec>(p)          ; // vector of current parameters
-  uvec   B          (p)                    ; // guys reaching the boundary
-  for (int i=0;i<p;i++){B(i) = i;}
+  uvec all(p);
+  for (int i=0;i<p;i++){all(i) = i;}
+  uvec   B           = all                 ; // guys reaching the boundary
+  uvec   I = setdiff(all,B)                ; // guys living in between the supremum
   mat    coef                              ; // matrice of solution path
   vec    grd                               ; // smooth part of the gradient
   vec    mu        = zeros<vec>(n_lambda)  ; // the intercept term
@@ -103,6 +105,7 @@ SEXP bounded_reg(SEXP X        ,
   uvec   it_optim                          ; // # of loop in the optimization process for each loop of the active se
   bool  success_optim = true               ; // was the internal system resolution successful?
   vec    timing      (n_lambda)            ; // succesive timing in
+  vec  df          (n_lambda)              ; // degrees of freedom
   wall_clock timer                         ; // clock
   mat   iB                                 ; // contains row indices of the bounded variables
   mat   jB                                 ; // contains column indices of the bounded variables
@@ -153,7 +156,7 @@ SEXP bounded_reg(SEXP X        ,
 	  if (it_active[m] == max_iter) {
 	    throw std::runtime_error("Fail to converge...");
 	  } else {
-	    it_optim[nbr_opt] = quadra_breg(beta, xtx, xty, lambda1[m], grd, B);
+	    it_optim[nbr_opt] = quadra_breg(beta, xtx, xty, lambda1[m], grd, B, I);
 	  }
 	} catch (std::runtime_error& error) {
 	  if (verbose > 0) {
@@ -168,7 +171,8 @@ SEXP bounded_reg(SEXP X        ,
 	    fun = 1 ;
 	    it_optim[nbr_opt] = fista_breg(beta, xtx, xty, grd, lambda1[m], L, pow(eps,2));
 	    // reformating the output
-	    B    = find(abs(abs(beta) - max(abs(beta))) < ZERO );
+	    B = find(abs(abs(beta) - max(abs(beta))) < ZERO );
+	    I = setdiff(all, B) ;
 	  } else {
 	    if (verbose > 0) {
 	      Rprintf("\nCutting the solution path to this point, as you specified bulletproof=FALSE.");
@@ -215,6 +219,9 @@ SEXP bounded_reg(SEXP X        ,
       converge[m] = 3;
     }
 
+    // degress of freedom
+    df[m] = get_df_breg(lambda2, xtx, S, I);
+
     // Preparing next value of the penalty
     if (converge[m] == 2 || converge[m] == 3) {
       lambda1     =    lambda1.subvec(0,m-1) ;
@@ -222,6 +229,7 @@ SEXP bounded_reg(SEXP X        ,
       max_grd     =   max_grd.subvec(0,m-1)  ;
       it_active   = it_active.subvec(0,m)    ;
       timing      =    timing.subvec(0,m)    ;
+      df          =    df.subvec(0,m)        ;
       break;
     } else {
       if (any(penscale != 1)) {
@@ -249,10 +257,11 @@ SEXP bounded_reg(SEXP X        ,
   return List::create(Named("coefficients") = strans(coef),
 		      Named("iB")           = iB          ,
 		      Named("jB")           = jB          ,
-		      Named("mu")           = mu       ,
-		      Named("meanx")        = meanx    ,
-		      Named("normx")        = normx    ,
-		      Named("lambda1")      = lambda1  ,
+		      Named("mu")           = mu          ,
+		      Named("meanx")        = meanx       ,
+		      Named("normx")        = normx       ,
+		      Named("lambda1")      = lambda1     ,
+		      Named("df")           = df          ,
 		      Named("it.active")    = it_active   ,
 		      Named("it.optim")     = it_optim    ,
 		      Named("max.grd")      = max_grd     ,

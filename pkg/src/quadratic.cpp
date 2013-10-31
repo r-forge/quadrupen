@@ -80,6 +80,7 @@ int quadra_breg(vec    &beta,
 		double &pen   ,
 		vec    &grd   ,
 		uvec   &B     ,
+		uvec   &I     ,
 		const int maxit) {
 
   const double zero = 2e-16     ;
@@ -88,7 +89,6 @@ int quadra_breg(vec    &beta,
   double bound ; //
   uvec all(p)           ;
   for (int i=0;i<p;i++){all(i) = i;}
-  uvec I             ; // guys living in between the supremum
   uvec toB           ; // guys reaching the boundary after optimization
   uvec toI           ; // guys leaving the boundary after optimization
   vec  theta = -sign(grd.elem(B)) ;

@@ -1,5 +1,9 @@
 NEWS/Changelog
 
+0.2-4	(2013-11-xx)
+    +   added computation of degrees of freedom (for elastic net and bounded regression)
+    +   added a method to compute penalized criteria (BIC/AIC) of a quadrupen fit
+
 0.2-3	(2013-08-26)
     +   added back the 'normalize' parameter
     +   standardization is performed within the C++ code

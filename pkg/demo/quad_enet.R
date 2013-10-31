@@ -31,6 +31,8 @@ fit <- elastic.net(x,y,lambda2=slot(cv.double, "lambda2.min"))
 plot(fit)
 ## a quick summary of the fit
 print(fit)
+## AIC and BIC
+criteria(fit)
 
 ## Call to stability selection function, 200 subsampling
 stab <- stability(x,y, subsamples=200, lambda2=1, min.ratio=1e-2)

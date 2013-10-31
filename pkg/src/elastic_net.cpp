@@ -266,7 +266,7 @@ SEXP elastic_net(SEXP BETA0    ,
     }
 
     // degress of freedom
-    df[m] = get_df(lambda2, R, xAtxA, S, A, fun);
+    df[m] = get_df_enet(lambda2, R, xAtxA, S, A, fun);
 
     // the reference parameter (obtained once optimum is met)
     if (monitor > 0) {

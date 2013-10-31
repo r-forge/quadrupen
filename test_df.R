@@ -16,7 +16,7 @@ y <- 10 + x %*% beta + rnorm(n,0,10)
 
 vec.lambda2 <- 10^seq(.5,-3,len=50)
 crit <- sapply(vec.lambda2, function(lambda2) {
-  pen.criterion(elastic.net(x,y,lambda2=lambda2,nlambda1=50),pen=log(nrow(x)),sigma=10)@criterion
+  pen.criteria(elastic.net(x,y,lambda2=lambda2,nlambda1=50),pen=log(nrow(x)),sigma=10)@criterion
 })
 colnames(crit) <- vec.lambda2
 crit <- melt(crit, varnames=c("lambda1", "lambda2"))
