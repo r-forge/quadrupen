@@ -46,13 +46,14 @@
 ##'
 ##' @exportClass cvpen
 ##'
+setClassUnion("lambda", c("NULL","numeric"))
 setClass("cvpen",
    representation = representation(
-     lambda1     = "numeric",
-     lambda2     = "numeric",
-     lambda1.min = "numeric",
-     lambda1.1se = "numeric",
-     lambda2.min = "numeric",
+     lambda1     = "lambda",
+     lambda2     = "lambda",
+     lambda1.min = "lambda",
+     lambda1.1se = "lambda",
+     lambda2.min = "lambda",
      cv.error    = "data.frame",
      folds       = "list",
      beta.min    = "numeric",

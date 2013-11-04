@@ -21,11 +21,9 @@ x <- as.matrix(matrix(rnorm(100*n),n,100) %*% chol(Sigma))
 y <- mu + x %*% beta + rnorm(n, 0, sigma)
 
 ## Test simple and double cross-validation
-cv.double <- crossval(x, y, "elastic.net", lambda2=10^seq(2,-2,len=50))
-cv.simple <- crossval(x, y, "elastic.net", lambda2=slot(cv.double, "lambda2.min"))
-plot(cv.double)
+cv.simple <- crossval(x, y, "lasso")
 plot(cv.simple)
-fit <- elastic.net(x,y,lambda2=slot(cv.double, "lambda2.min"))
+fit <- lasso(x,y)
 
 ## plot the solution path
 plot(fit)
@@ -35,7 +33,7 @@ print(fit)
 criteria(fit)
 
 ## Call to stability selection function, 200 subsampling
-stab <- stability(x,y, "elastic.net", subsamples=200, lambda2=1, min.ratio=1e-2)
+stab <- stability(x,y, "lasso", subsamples=200, min.ratio=1e-2)
 ## plot the stability path
 plot(stab, labels=labels, nvar=20)
 ## a quick summary of the fit

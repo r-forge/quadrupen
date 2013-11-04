@@ -8,8 +8,8 @@ test_that("lasso_quad2lars", {
       lasso.larsen <- lars(x,y,intercept=intercept,normalize=normalize)
       iols <- nrow(lasso.larsen$beta) ## remove last entry corresponding to the OLS estimator
       lambda1 <-  lasso.larsen$lambda ## usde the lars lambda grid
-      lasso.quadru <- elastic.net(x,y, intercept=intercept, normalize=normalize,
-                                  lambda1=lambda1, lambda2=0, control=list(method="quadra"))
+      lasso.quadru <- lasso(x,y, intercept=intercept, normalize=normalize,
+                                  lambda1=lambda1, control=list(method="quadra"))
       quad <- list(coef   = as.matrix(lasso.quadru@coefficients),
                    meanx  = lasso.quadru@meanx,
                    normx  = lasso.quadru@normx,
@@ -94,7 +94,7 @@ test_that("lasso_quad2glmnet", {
   ## If thresh is set to the default, the test won't pass!!!
   ## This is beacause coordinate descent is fast yet not extremely accurate
   lasso.glmn <- glmnet(x,y, lambda.min.ratio=1e-2, thresh=1e-20)
-  lasso.quad <- elastic.net(x,y, lambda1=lasso.glmn$lambda*sqrt(n), lambda2=0)
+  lasso.quad <- lasso(x,y, lambda1=lasso.glmn$lambda*sqrt(n))
 
   quad <- list(coef   = as.matrix(lasso.quad@coefficients),
                mu     = lasso.quad@mu,

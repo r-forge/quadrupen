@@ -87,6 +87,9 @@ y <- 10 + x \%*\% beta + rnorm(n,0,10)
 
 ## Plot penalized criteria for the Elastic-net path
 criteria(elastic.net(x,y, lambda2=1))
+
+##' Plot penalized criteria for the Bounded regression
+criteria(bounded.reg(x,y, lambda2=1))
 }
 }
 \references{

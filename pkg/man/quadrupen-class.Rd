@@ -64,10 +64,6 @@
   \item{\code{lambda2}:}{Scalar (class \code{"numeric"})
   for the amount of \eqn{\ell_2}{l2} (ridge-like) penalty.}
 
-  \item{\code{struct}:}{Object of class \code{"Matrix"}
-  used to structure the coefficients in the
-  \eqn{\ell_2}{l2} penalty.}
-
   \item{\code{control}:}{Object of class \code{"list"} with
   low level options used for optimization.}
 

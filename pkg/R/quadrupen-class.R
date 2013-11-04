@@ -48,9 +48,6 @@
 ##' \item{\code{lambda2}:}{Scalar (class \code{"numeric"}) for the
 ##' amount of \eqn{\ell_2}{l2} (ridge-like) penalty.}
 ##'
-##' \item{\code{struct}:}{Object of class \code{"Matrix"} used to
-##' structure the coefficients in the \eqn{\ell_2}{l2} penalty.}
-##'
 ##' \item{\code{control}:}{Object of class \code{"list"} with low
 ##' level options used for optimization.}
 ##'
@@ -103,8 +100,8 @@
 ##'
 ##' @importFrom stats fitted predict residuals deviance
 ##'
-setClassUnion("strClass", c("Matrix","NULL"))
 setClassUnion("mat", c("Matrix","matrix"))
+setClassUnion("naive", c("NULL","logical"))
 setClass("quadrupen",
   representation = representation(
      coefficients  = "Matrix",
@@ -119,10 +116,9 @@ setClass("quadrupen",
      r.squared     = "numeric"  ,
      penscale      = "numeric"  ,
      penalty       = "character",
-     naive         = "logical"  ,
+     naive         = "naive"    ,
      lambda1       = "numeric"  ,
      lambda2       = "numeric"  ,
-     struct        = "strClass" ,
      control       = "list"     ,
      monitoring    = "list")
 )
@@ -131,10 +127,14 @@ setMethod("print", "quadrupen", definition =
    function(x, ...) {
      ncoef <- ncol(x@coefficients)
      if (is.null(ncoef)) {ncoef <- ncol(x@coefficients)}
-     if (x@naive) {
-       cat("Linear regression with", x@penalty, "penalizer, no rescaling of the coefficients (naive).\n")
+     if (!is.null(x@naive)) {
+       if (x@naive) {
+         cat("Linear regression with", x@penalty, "penalizer, no rescaling of the coefficients (naive).\n")
+       } else {
+         cat("Linear regression with", x@penalty, "penalizer, coefficients rescaled by (1+lambda2).\n")
+       }
      } else {
-       cat("Linear regression with", x@penalty, "penalizer, coefficients rescaled by (1+lambda2).\n")
+       cat("Linear regression with", x@penalty, "penalizer.\n")
      }
      if (any(x@intercept != 0)) {
        cat("- number of coefficients:", ncoef,"+ intercept\n")
@@ -144,8 +144,8 @@ setMethod("print", "quadrupen", definition =
      cat("- penalty parameter lambda1:", length(x@lambda1), "points from",
          format(max(x@lambda1), digits = 3),"to",
          format(min(x@lambda1), digits = 3),"\n")
-     cat("- penalty parameter lambda2:", x@lambda2)
-     cat("\n")
+     if (!is.null(x@lambda2))
+       cat("- penalty parameter lambda2:", x@lambda2, "\n")
      invisible(x)
    }
 )

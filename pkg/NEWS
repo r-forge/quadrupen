@@ -1,6 +1,7 @@
 NEWS/Changelog
 
 0.2-4	(2013-11-xx)
+    +   added a 'lasso' function, simple wrapper to the elastic-net 'function'
     +   added computation of degrees of freedom (for elastic net and bounded regression)
     +   added a method to compute penalized criteria (BIC/AIC) of a quadrupen fit
 

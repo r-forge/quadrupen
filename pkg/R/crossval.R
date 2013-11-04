@@ -7,8 +7,9 @@
 ##' cross-validation is performed.
 ##'
 ##' @param penalty a string for the fitting procedure used for
-##' cross-validation. Either \code{"elastic.net"} or
-##' \code{"bounded.reg"}, at the moment. Default is \code{elastic.net}.
+##' cross-validation. Either \code{"lasso"}, \code{"elastic.net"},
+##' \code{"bounded.reg"}, at the moment. Default is
+##' \code{elastic.net}.
 ##'
 ##' @param x matrix of features, possibly sparsely encoded
 ##' (experimental). Do NOT include intercept.
@@ -27,7 +28,8 @@
 ##' corresponding fitting method is used and a simple CV is
 ##' performed. If a vector of values is given, double cross-validation
 ##' is performed (both on \code{lambda1} and \code{lambda2}, using the
-##' same folds for each \code{lambda2}).
+##' same folds for each \code{lambda2}). Ignored when \code{penalty}
+##' equals \code{"lasso"}.
 ##'
 ##' @param verbose logical; indicates if the progression (the current
 ##' lambda2) should be displayed. Default is \code{TRUE}.
@@ -37,8 +39,8 @@
 ##'
 ##' @param ... additional parameters to overwrite the defaults of the
 ##' fitting procedure identified by the \code{'penalty'} argument. See
-##' the corresponding documentation (\code{\link{elastic.net}} or
-##' \code{\link{bounded.reg}}).
+##' the corresponding documentation (\code{\link{lasso}},
+##' \code{\link{elastic.net}} or \code{\link{bounded.reg}}).
 ##'
 ##' @note If the user runs the fitting method with option
 ##' \code{'bulletproof'} set to \code{FALSE}, the algorithm may stop
@@ -100,7 +102,7 @@
 ##' @export
 crossval <- function(x,
                      y,
-                     penalty  = c("elastic.net", "bounded.reg"),
+                     penalty  = c("elastic.net", "lasso", "bounded.reg"),
                      K        = 10,
                      folds    = split(sample(1:nrow(x)), rep(1:K, length=nrow(x))),
                      lambda2  = 0.01,
@@ -115,9 +117,17 @@ crossval <- function(x,
     mc.cores <- 1
   }
   penalty <- match.arg(penalty)
+  fit.func <- switch(penalty,
+                        "elastic.net" = elastic.net,
+                        "lasso"       = lasso      , 
+                        "bounded.reg" = bounded.reg)
   get.lambda1 <- switch(penalty,
                         "elastic.net" = get.lambda1.l1,
+                        "lasso"       = get.lambda1.l1,
                         "bounded.reg" = get.lambda1.li)
+
+  if (penalty == "lasso") {lambda2 <- NULL}
+  
   user <- list(...)
   defs <- default.args(penalty,nrow(x)-max(sapply(folds,length)),ncol(x),user)
   args <- modifyList(defs, user)
@@ -139,7 +149,7 @@ crossval <- function(x,
         cat(round(lambda2[i],3),"\t")
         if (i %% 5 == 0) {cat("\n")}
       }
-      simple.cv(folds, x, y, args, lambda2[i], mc.cores)
+      simple.cv(folds, x, y, fit.func, args, lambda2[i], mc.cores)
     }, simplify=FALSE)
     if(verbose){cat("\n")}
 
@@ -163,7 +173,7 @@ crossval <- function(x,
       cat("\nSIMPLE CROSS-VALIDATION FOR ",penalty," REGULARIZER \n\n")
       cat(length(folds),"-fold CV on the lambda1 grid, lambda2 is fixed.\n", sep="")
     }
-    cv <- simple.cv(folds, x, y, args, lambda2, mc.cores)
+    cv <- simple.cv(folds, x, y, fit.func, args, lambda2, mc.cores)
 
     ## Recovering the best lambda1 and lambda2
     lambda1.min <- max(cv$lambda1[cv$mean <= min(cv$mean)], na.rm=TRUE)
@@ -173,13 +183,14 @@ crossval <- function(x,
 
   ## Apply the fitting procedure with these best lambda2 parameter
   args$lambda2 <- lambda2.min
-  best.fit <- do.call(quadrupen, c(list(x=x,y=y),args))
+  args$checkargs <- FALSE ## enforcing checkargs to FALSE to save some time
+  best.fit <- do.call(fit.func, c(list(x=x,y=y),args))
 
   ## Finally recover the CV choice (minimum and 1-se rule)
   ind.max <- nrow(best.fit@coefficients)
   ind.min <- min(match(lambda1.min, args$lambda1),ind.max)
   ind.1se <- min(match(lambda1.1se, args$lambda1),ind.max)
-
+  
   beta.min <- best.fit@coefficients[ind.min,]
   beta.1se <- best.fit@coefficients[ind.1se,]
 
@@ -195,20 +206,21 @@ crossval <- function(x,
              beta.1se    = beta.1se))
 }
 
-simple.cv <- function(folds, x, y, args, lambda2, mc.cores) {
+simple.cv <- function(folds, x, y, fit.func, args, lambda2, mc.cores) {
 
   K <- length(folds)
   n <- length(y)
 
   ## overwrite irrelevant arguments
   args$control$verbose <- 0
-  args$lambda2  <- lambda2
-  args$max.feat <- ncol(x)
+  args$lambda2         <- lambda2
+  args$max.feat        <- ncol(x)
+  args$checkargs       <- FALSE
 
   ## Multicore approach
   one.fold <- function(k) {
     omit <- folds[[k]]
-    fit <- do.call(quadrupen, c(list(x=x[-omit, ], y=y[-omit]), args))
+    fit <- do.call(fit.func, c(list(x=x[-omit, ], y=y[-omit]), args))
     fold.err <- sweep(matrix(predict(fit,matrix(x[omit,], nrow=length(omit))), nrow=length(omit)), 1L, y[omit], check.margin = FALSE)^2
     if (ncol(fold.err) < length(args$lambda1)) {
       NAs <- length(args$lambda1)-ncol(fold.err)
@@ -228,22 +240,4 @@ simple.cv <- function(folds, x, y, args, lambda2, mc.cores) {
   serr <- sqrt((colSums(sweep(err, 2L, mean, check.margin = FALSE)^2,na.rm=TRUE)/(n-1)) /K)
 
   return(data.frame(mean=mean, serr=serr, lambda1=args$lambda1))
-}
-
-default.args <- function(penalty,n,p,user) {
-  lambda2 <- ifelse(is.null(user$lambda2),0.01,user$lambda2)
-  return(list(
-    beta0     = NULL,
-    lambda1   = NULL,
-    lambda2   = 0.01,
-    penalty   = penalty,
-    penscale  = rep(1,p),
-    struct    = NULL,
-    intercept = TRUE,
-    normalize = TRUE,
-    naive     = FALSE,
-    nlambda1  = ifelse(is.null(user$lambda1),100,length(user$lambda1)),
-    min.ratio = ifelse(n<p,0.01,5e-3),
-    max.feat  = ifelse(lambda2<1e-2,min(n,p),min(4*n,p)),
-    control   = list()))
 }

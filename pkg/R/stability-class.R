@@ -36,24 +36,30 @@ setClass("stability.path",
   representation = representation(
      probabilities = "Matrix"   ,
      penalty       = "character",
-     naive         = "logical"  ,
-     lambda1       = "numeric"  ,
-     lambda2       = "numeric"  ,
+     naive         = "naive"  ,
+     lambda1       = "lambda"  ,
+     lambda2       = "lambda"  ,
      folds         = "list"  )
 )
 
 setMethod("print", "stability.path", definition =
    function(x, ...) {
-     if (x@naive) {
-       cat("Stability path for", x@penalty, "penalizer, no rescaling of the coefficients (naive).\n")
+
+     if (!is.null(x@naive)) {
+       if (x@naive) {
+         cat("Stability path for", x@penalty, "penalizer, no rescaling of the coefficients (naive).\n")
+       } else {
+         cat("Stability path for", x@penalty, "penalizer, coefficients rescaled by (1+lambda2).\n")
+       }
      } else {
-       cat("Stability path for", x@penalty, "penalizer, coefficients rescaled by (1+lambda2).\n")
+       cat("Stability path for", x@penalty, "penalizer.\n")
      }
+
      cat("- penalty parameter lambda1:", length(x@lambda1), "points from",
          format(max(x@lambda1), digits = 3),"to",
          format(min(x@lambda1), digits = 3),"\n")
-     cat("- penalty parameter lambda2:", x@lambda2)
-     cat("\n")
+     if (!is.null(x@lambda2))
+       cat("- penalty parameter lambda2:", x@lambda2, "\n")
      invisible(x)
    }
 )

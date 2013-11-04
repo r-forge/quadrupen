@@ -9,8 +9,8 @@
 ##' @param y response vector.
 ##'
 ##' @param penalty a string for the fitting procedure used for
-##' cross-validation. Either \code{\link{elastic.net}} or
-##' \code{"bounded.reg"}.
+##' cross-validation. Either \code{\link{elastic.net}},
+##' \code{\link{lasso}} or \code{"bounded.reg"}.
 ##'
 ##' @param subsamples integer indicating the number of subsamplings
 ##' used to estimate the selection probabilities. Default is 100.
@@ -38,7 +38,8 @@
 ##'
 ##' @param ... additional parameters to overwrite the defaults of the
 ##' fitting procedure. See the corresponding documentation
-##' (\code{\link{elastic.net}} or \code{\link{bounded.reg}})
+##' (\code{\link{elastic.net}},\code{\link{lasso}} or
+##' \code{\link{bounded.reg}})
 ##'
 ##' @return An object of class \code{\linkS4class{stability.path}}.
 ##'
@@ -105,7 +106,7 @@
 ##' @export
 stability <- function(x,
                       y,
-                      penalty = c("elastic.net", "bounded.reg"),
+                      penalty = c("elastic.net", "lasso", "bounded.reg"),
                       subsamples  = 100,
                       sample.size = floor(n/2),
                       randomize   = TRUE,
@@ -122,17 +123,26 @@ stability <- function(x,
     mc.cores <- 1
   }
   penalty <- match.arg(penalty)
+  fit.func <- switch(penalty,
+                        "elastic.net" = elastic.net,
+                        "lasso"       = lasso      , 
+                        "bounded.reg" = bounded.reg)
   get.lambda1 <- switch(penalty,
                         "elastic.net" = get.lambda1.l1,
+                        "lasso"       = get.lambda1.l1,
                         "bounded.reg" = get.lambda1.li)
+  if (penalty == "lasso") {lambda2 <- NULL}
+
   p <- ncol(x)
   n <- nrow(x)
+
   user <- list(...)
-  defs <- default.args(penalty,nrow(x),ncol(x),user)
+  defs <- default.args(penalty,n,p,user)
   args <- modifyList(defs, user)
   ## overwrite parameters irrelevant in and resampling context
   args$control$verbose <- 0
-  args$max.feat <- p
+  args$max.feat  <- p
+  args$checkargs <- FALSE
   ## Compute a grid of lambda1 (the smae for each fold)
   if (is.null(args$lambda1)) {
     input <- standardize(x,y,args$intercept,args$normalize,args$penscale)
@@ -147,7 +157,12 @@ stability <- function(x,
 
   if (verbose) {
     cat(paste("\n\nSTABILITY SELECTION ",ifelse(randomize,"with","without")," randomization (weakness = ",weakness,")",sep=""))
-    cat(paste("\nFitting procedure:",penalty," with lambda2 = ",args$lambda2," and an ",nlambda1,"-dimensional grid of lambda1.", sep=""))
+    if(penalty == "lasso") {
+      cat(paste("\nFitting procedure: ",penalty," with ",nlambda1,"-dimensional grid of lambda1.", sep=""))
+    } else {
+      cat(paste("\nFitting procedure: ",penalty," with lambda2 = ",args$lambda2," and an ",nlambda1,"-dimensional grid of lambda1.", sep=""))
+    }
+    
     cat("\nRunning",length(blocs),"jobs parallely (1 per core)")
     cat("\nApprox.", length(blocs[[1]]),"subsamplings for each job for a total of",subsamples)
   }
@@ -158,7 +173,7 @@ stability <- function(x,
     subsamples.ok <- 0
     for (s in 1:length(subsets)) {
       if (randomize) {args$penscale <- penscale / runif(p,weakness,1)}
-      active <- do.call(quadrupen, c(list(x=x[folds[[subsets[s]]], ], y=y[folds[[subsets[s]]]]), args))@active.set
+      active <- do.call(fit.func, c(list(x=x[folds[[subsets[s]]], ], y=y[folds[[subsets[s]]]]), args))@active.set
       if (nrow(active) == length(args$lambda1)) {
         subsamples.ok <- subsamples.ok + 1
         select <- select + active

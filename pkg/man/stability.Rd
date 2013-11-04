@@ -3,7 +3,7 @@
 \title{Stability selection for a quadrupen fit.}
 \usage{
   stability(x, y,
-    penalty = c("elastic.net", "bounded.reg"),
+    penalty = c("elastic.net", "lasso", "bounded.reg"),
     subsamples = 100, sample.size = floor(n/2),
     randomize = TRUE, weakness = 0.5, verbose = TRUE,
     folds = replicate(subsamples, sample(1:nrow(x), sample.size), simplify = FALSE),
@@ -16,8 +16,8 @@
   \item{y}{response vector.}
 
   \item{penalty}{a string for the fitting procedure used
-  for cross-validation. Either \code{\link{elastic.net}} or
-  \code{"bounded.reg"}.}
+  for cross-validation. Either \code{\link{elastic.net}},
+  \code{\link{lasso}} or \code{"bounded.reg"}.}
 
   \item{subsamples}{integer indicating the number of
   subsamplings used to estimate the selection
@@ -47,7 +47,8 @@
 
   \item{...}{additional parameters to overwrite the
   defaults of the fitting procedure. See the corresponding
-  documentation (\code{\link{elastic.net}} or
+  documentation
+  (\code{\link{elastic.net}},\code{\link{lasso}} or
   \code{\link{bounded.reg}})}
 }
 \value{

@@ -2,7 +2,8 @@
 \alias{crossval}
 \title{Cross-validation function for quadrupen fitting methods.}
 \usage{
-  crossval(x, y, penalty = c("elastic.net", "bounded.reg"),
+  crossval(x, y,
+    penalty = c("elastic.net", "lasso", "bounded.reg"),
     K = 10,
     folds = split(sample(1:nrow(x)), rep(1:K, length = nrow(x))),
     lambda2 = 0.01, verbose = TRUE,
@@ -10,9 +11,9 @@
 }
 \arguments{
   \item{penalty}{a string for the fitting procedure used
-  for cross-validation. Either \code{"elastic.net"} or
-  \code{"bounded.reg"}, at the moment. Default is
-  \code{elastic.net}.}
+  for cross-validation. Either \code{"lasso"},
+  \code{"elastic.net"}, \code{"bounded.reg"}, at the
+  moment. Default is \code{elastic.net}.}
 
   \item{x}{matrix of features, possibly sparsely encoded
   (experimental). Do NOT include intercept.}
@@ -33,7 +34,8 @@
   and a simple CV is performed. If a vector of values is
   given, double cross-validation is performed (both on
   \code{lambda1} and \code{lambda2}, using the same folds
-  for each \code{lambda2}).}
+  for each \code{lambda2}). Ignored when \code{penalty}
+  equals \code{"lasso"}.}
 
   \item{verbose}{logical; indicates if the progression (the
   current lambda2) should be displayed. Default is
@@ -45,8 +47,8 @@
   \item{...}{additional parameters to overwrite the
   defaults of the fitting procedure identified by the
   \code{'penalty'} argument. See the corresponding
-  documentation (\code{\link{elastic.net}} or
-  \code{\link{bounded.reg}}).}
+  documentation (\code{\link{lasso}},
+  \code{\link{elastic.net}} or \code{\link{bounded.reg}}).}
 }
 \value{
   An object of class "cvpen" for which a \code{plot} method

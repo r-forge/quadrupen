@@ -28,9 +28,12 @@ Collate:
     'init.R'
     'quadrupen-package.R'
     'quadrupen-class.R'
-    'quadrupen.R'
     'crossval-class.R'
     'crossval.R'
     'stability-class.R'
     'stability.R'
+    'bounded-reg.R'
+    'elastic-net.R'
+    'utils.R'
+    'lasso.R'
 Packaged: 2013-03-25 19:41:00 UTC; jchiquet
