@@ -192,7 +192,7 @@ bounded.reg <- function(x,
 
   p <- ncol(x) # problem size
   n <- nrow(x) # sample size
-  
+
   ## ===================================================
   ## CHECKS TO (PARTIALLY) AVOID CRASHES OF THE C++ CODE
   if (checkargs) {
@@ -283,8 +283,6 @@ bounded.reg <- function(x,
   active.set   <- sparseMatrix(i = out$iB+1,
                                j = out$jB+1,
                                dims=c(length(out$lambda1),p))
-  out$delta.hat  <- NULL ## not implemented
-  out$delta.star <- NULL ##
   ## END OF CALL
   if (ctrl$timer) {
     internal.timer <- (proc.time() - cpp.start)[3]
@@ -306,9 +304,7 @@ bounded.reg <- function(x,
                       status         = c(out$converge  ),
                       pensteps.timer = c(out$timing    ),
                       external.timer = external.timer   ,
-                      internal.timer = internal.timer   ,
-                      dist.to.opt    = c(out$delta.hat ),
-                      dist.to.str    = c(out$delta.star))
+                      internal.timer = internal.timer   )
   dimnames(coefficients)[[1]] <- round(c(out$lambda1),3)
   if (is.null(colnames(x))) {
     dimnames(coefficients)[[2]] <- 1:p
@@ -334,7 +330,6 @@ bounded.reg <- function(x,
              active.set   = active.set     ,
              intercept    = intercept      ,
              mu           = mu             ,
-             meanx        = drop(out$meanx),
              normx        = drop(out$normx),
              fitted       = fitted         ,
              residuals    = residuals      ,

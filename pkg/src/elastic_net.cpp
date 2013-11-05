@@ -142,7 +142,7 @@ SEXP elastic_net(SEXP BETA0    ,
     grd += xtxA * betaA    ;
     nbr_in = A.n_elem      ;
     xAtxA = xtxA.rows(A)   ;
-    if (fun == 0 & usechol) {
+    if ((fun == 0) & (usechol)) {
       R = chol(xAtxA) ;
     }
     if (fun == 1) {
@@ -328,7 +328,6 @@ SEXP elastic_net(SEXP BETA0    ,
 		      Named("iA")         = iA       ,
 		      Named("jA")         = jA       ,
 		      Named("mu")         = mu       ,
-		      Named("meanx")      = meanx    ,
 		      Named("normx")      = normx    ,
 		      Named("lambda1")    = lambda1  ,
 		      Named("df")         = df       ,

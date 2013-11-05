@@ -24,9 +24,6 @@
 ##' containing the successive values of the (unpenalized) intercept.
 ##' Equals to zero if \code{intercept} has been set to \code{FALSE}.}
 ##'
-##' \item{\code{meanx}:}{Vector (class \code{"numeric"}) containing
-##' the column means of the predictor matrix.}
-##'
 ##' \item{\code{normx}:}{Vector (class \code{"numeric"}) containing the
 ##' square root of the sum of squares of each column of the design
 ##' matrix.}
@@ -108,7 +105,6 @@ setClass("quadrupen",
      active.set    = "Matrix",
      intercept     = "logical"  ,
      mu            = "numeric"  ,
-     meanx         = "numeric"  ,
      normx         = "numeric"  ,
      fitted        = "mat"      ,
      residuals     = "mat"      ,
@@ -141,11 +137,22 @@ setMethod("print", "quadrupen", definition =
      } else {
        cat("- number of coefficients:", ncoef,"(no intercept)\n")
      }
-     cat("- penalty parameter lambda1:", length(x@lambda1), "points from",
-         format(max(x@lambda1), digits = 3),"to",
-         format(min(x@lambda1), digits = 3),"\n")
-     if (!is.null(x@lambda2))
-       cat("- penalty parameter lambda2:", x@lambda2, "\n")
+     if (length(x@lambda1) > 1) {
+       cat("- penalty parameter lambda1:", length(x@lambda1), "points from",
+           format(max(x@lambda1), digits = 3),"to",
+           format(min(x@lambda1), digits = 3),"\n")
+     } else {
+       cat("- penalty parameter lambda1:", x@lambda1, "\n")
+     }
+     if (!is.null(x@lambda2)){
+       if (length(x@lambda2) > 1) {
+         cat("- penalty parameter lambda2:", length(x@lambda2), "points from",
+             format(max(x@lambda2), digits = 3),"to",
+             format(min(x@lambda2), digits = 3),"\n")
+       } else {
+         cat("- penalty parameter lambda2:", x@lambda2, "\n")
+       }
+     }
      invisible(x)
    }
 )
@@ -201,9 +208,10 @@ setMethod("deviance", "quadrupen", definition =
 ##' for the moment). Must be of class \code{quadrupen}.
 ##' @param y used for S4 compatibility.
 ##' @param xvar variable to plot on the X-axis: either \code{"lambda"}
-##' (\eqn{\lambda_1}{lambda1} penalty level) or \code{"fraction"}
-##' (\eqn{\ell_1}{l1}-norm of the coefficients). Default is set to
-##' \code{"lambda"}.
+##' (\eqn{\lambda_1}{lambda1} penalty level or
+##' \eqn{\lambda_2}{lambda2} for ridge regression) or
+##' \code{"fraction"} (\eqn{\ell_1}{l1}-norm
+##' of the coefficients). Default is set to \code{"lambda"}.
 ##' @param main the main title. Default is set to the model name followed
 ##' by what is on the Y-axis.
 ##' @param log.scale logical; indicates if a log-scale should be used
@@ -263,8 +271,8 @@ setMethod("plot", "quadrupen", definition =
             log.scale = TRUE, standardize=TRUE, reverse=FALSE,
             labels = NULL, plot = TRUE, ...) {
 
-     if (length(x@lambda1) == 1) {
-       stop("Not available when length(lambda1) == 1")
+     if (length(x@lambda1 & x@lambda2) == 1) {
+       stop("Not available when length(lambda1) == 1 & length(lambda2) == 1")
      }
 
      nzeros <- which(colSums(x@coefficients) != 0)
@@ -279,7 +287,15 @@ setMethod("plot", "quadrupen", definition =
        beta  <- scale(beta, FALSE, 1/x@normx[nzeros])
      }
 
-     xv <- switch(xvar,"fraction" = apply(abs(beta),1,sum)/max(apply(abs(beta),1,sum)), x@lambda1)
+     if (xvar == "fraction") {
+       xv <-  apply(abs(beta),1,sum)/max(apply(abs(beta),1,sum))
+     } else {
+       if (x@penalty == "ridge") {
+         xv <- x@lambda2
+       } else {
+         xv <- x@lambda1
+       }
+     }
      if (log.scale & xvar=="lambda") {
        xv <- log10(xv)
      }
@@ -300,8 +316,8 @@ setMethod("plot", "quadrupen", definition =
 
      d <- ggplot(data.coef,aes(x=xvar,y=coefficients, colour=variables, group=var)) +
        geom_line(aes(x=xvar,y=coef)) +
-         labs(x=ifelse(xvar=="fraction",expression(paste("|",beta[lambda[1]],"|",{}[1]/max[lambda[1]],"|",beta[lambda[1]],"|",{}[1],sep="")),
-                ifelse(log.scale,expression(log[10](lambda[1])),expression(lambda[1]))),
+         labs(x=ifelse(xvar=="fraction",expression(paste("|",beta[lambda],"|",{}[1]/max[lambda],"|",beta[lambda],"|",{}[1],sep="")),
+                ifelse(log.scale,expression(log[10](lambda)),expression(lambda))),
               y=ifelse(standardize, "standardized coefficients","coefficients")) + ggtitle(main) +
            geom_hline(yintercept=0, alpha=0.5, linetype="dotted")
      if (xvar=="lambda" & reverse==TRUE) {
@@ -331,7 +347,7 @@ setMethod("plot", "quadrupen", definition =
 ##'
 ##' @usage criteria(object, penalty=setNames(c(2, log(p)), c("AIC","BIC")), sigma=NULL,
 ##'            log.scale=TRUE, xvar = "lambda", plot=TRUE)
-##' 
+##'
 ##' @param object output of a fitting procedure of the \pkg{quadrupen}
 ##' package (e.g. \code{\link{elastic.net}}). Must be of class
 ##' \code{quadrupen}.
@@ -382,7 +398,7 @@ setMethod("plot", "quadrupen", definition =
 ##'
 ##' @references Ryan Tibshirani and Jonathan Taylor. Degrees of
 ##' freedom in lasso problems, Annals of Statistics, 40(2) 2012.
-##' 
+##'
 ##' @name criteria,quadrupen-method
 ##' @aliases criteria,quadrupen-method
 ##' @aliases criteria.quadrupen
@@ -419,49 +435,49 @@ setGeneric("criteria", function(object, penalty=setNames(c(2, log(ncol(object@co
 setMethod("criteria", "quadrupen", definition =
    function(object, penalty=setNames(c(2, log(ncol(object@coefficients))), c("AIC","BIC")), sigma=NULL,
             log.scale=TRUE, xvar = "lambda", plot=TRUE) {
-     
+
      betas <- object@coefficients
-     
+
      n <- nrow(residuals(object))
      p <- ncol(betas)
-     
+
      ## compute the penalized criteria
      if (is.null(sigma)) {
        crit <- sapply(penalty, function(pen) n*log(deviance(object)) + pen * object@df)
      } else {
        crit <- sapply(penalty, function(pen) deviance(object)/n + pen * object@df/ n * sigma^2)
      }
-     
+
      ## put together all relevant information about those criteria
      criterion <- data.frame(crit, df=object@df, lambda=object@lambda1,
                              fraction = apply(abs(betas),1,sum)/max(apply(abs(betas),1,sum)))
      rownames(criterion) <- 1:nrow(criterion)
-     
+
      ## recover the associated vectors of parameters
      beta.min  <- t(betas[apply(crit, 2, which.min), ])
      if (!is.null(dim(beta.min)))
        colnames(beta.min) <- names(penalty)
-     
+
      ## plot the critera, if required
      if (plot) {
-       
+
        if (length(object@lambda1) == 1) {
          stop("Not available when length(lambda1) == 1")
        }
-       
+
        data.plot <- melt(criterion, id=xvar, measure=1:length(penalty), variable.name="criterion")
        colnames(data.plot)[1] <- "xvar"
-       
+
        xlab <- switch(xvar,
                       "fraction" = expression(paste("|",beta[lambda[1]],"|",{}[1]/max[lambda[1]],"|",beta[lambda[1]],"|",{}[1],sep="")),
                       "df" = "Estimated degrees of freedom",
                       ifelse(log.scale,expression(log[10](lambda[1])),expression(lambda[1])))
-       
+
        d <- ggplot(data.plot, aes(x=xvar, y=value, colour=criterion, group=criterion)) +
          geom_line(aes(x=xvar,y=value)) + geom_point(aes(x=xvar,y=value)) +
            labs(x=xlab, y="criterion's value",
                 title=paste("Information Criteria for a", slot(object, "penalty"),"fit"))
-       
+
        if (log.scale & xvar=="lambda") {
          d <- d + scale_x_log10()
        }
@@ -470,7 +486,7 @@ setMethod("criteria", "quadrupen", definition =
      } else {
        return(list(criterion=criterion, beta.min=beta.min))
      }
-     
+
      return(list(criterion=criterion, beta.min=beta.min))
    })
 

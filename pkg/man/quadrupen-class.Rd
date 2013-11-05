@@ -38,9 +38,6 @@
   intercept. Equals to zero if \code{intercept} has been
   set to \code{FALSE}.}
 
-  \item{\code{meanx}:}{Vector (class \code{"numeric"})
-  containing the column means of the predictor matrix.}
-
   \item{\code{normx}:}{Vector (class \code{"numeric"})
   containing the square root of the sum of squares of each
   column of the design matrix.}
