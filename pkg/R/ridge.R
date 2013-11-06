@@ -88,7 +88,7 @@ ridge <- function(x,
                   intercept  = TRUE,
                   normalize  = TRUE,
                   nlambda2   = 100 ,
-                  lambda.min = 1e-3,
+                  lambda.min = ifelse(n<=p,1e-2,1e-4),
                   lambda.max = 100,
                   control    = list(),
                   checkargs  = TRUE) {
@@ -108,7 +108,7 @@ ridge <- function(x,
     if(n != length(y))
       stop("x and y have not correct dimensions")
     if (!is.null(lambda2)) {
-      if(any(lambda2 <= 0))
+      if(any(lambda2 <= 0) | lambda.min <=0)
         stop("entries in lambda2 must all be postive.")
     }
     if (!is.null(struct)) {
@@ -203,7 +203,7 @@ ridge <- function(x,
              r.squared    = r.squared      ,
              penscale     = rep(1,p)       ,
              penalty      = "ridge"        ,
-             naive        = TRUE           ,
+             naive        = NULL           ,
              lambda1      = 0              ,
              lambda2      = c(out$lambda2) ,
              monitoring   = monitoring     ,

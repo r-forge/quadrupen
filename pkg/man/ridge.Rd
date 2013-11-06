@@ -4,8 +4,8 @@
 \usage{
   ridge(x, y, lambda2 = NULL, struct = NULL,
     intercept = TRUE, normalize = TRUE, nlambda2 = 100,
-    lambda.min = 0.001, lambda.max = 100, control = list(),
-    checkargs = TRUE)
+    lambda.min = ifelse(n <= p, 0.01, 1e-04),
+    lambda.max = 100, control = list(), checkargs = TRUE)
 }
 \arguments{
   \item{x}{matrix of features. Do NOT include intercept.

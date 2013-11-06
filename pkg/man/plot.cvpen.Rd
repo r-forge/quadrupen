@@ -1,7 +1,7 @@
 \docType{methods}
 \name{plot,cvpen-method}
-\alias{plot,cvpen-method}
 \alias{plot.cvpen}
+\alias{plot,cvpen-method}
 \title{Plot method for cross validated error of a \code{quadrupen} model}
 \arguments{
   \item{x}{output of a \code{crossval} run (must be of
@@ -24,10 +24,6 @@
 
   \item{plot}{logical; indicates if the graph should be
   plotted. Default is \code{TRUE}.}
-
-  \item{reverse}{logical; should the X-axis by reversed
-  when \code{xvar=lambda}? Default is FALSE.  Ignored for
-  2D cross-validation plot.}
 
   \item{...}{used for S4 compatibility.}
 }

@@ -1,7 +1,7 @@
 \docType{methods}
 \name{plot,quadrupen-method}
-\alias{plot,quadrupen-method}
 \alias{plot.quadrupen}
+\alias{plot,quadrupen-method}
 \title{Plot method for a quadrupen object}
 \arguments{
   \item{x}{output of a fitting procedure of the
@@ -12,8 +12,9 @@
   \item{y}{used for S4 compatibility.}
 
   \item{xvar}{variable to plot on the X-axis: either
-  \code{"lambda"} (\eqn{\lambda_1}{lambda1} penalty level)
-  or \code{"fraction"} (\eqn{\ell_1}{l1}-norm of the
+  \code{"lambda"} (\eqn{\lambda_1}{lambda1} penalty level
+  or \eqn{\lambda_2}{lambda2} for ridge regression) or
+  \code{"fraction"} (\eqn{\ell_1}{l1}-norm of the
   coefficients). Default is set to \code{"lambda"}.}
 
   \item{main}{the main title. Default is set to the model
@@ -26,9 +27,6 @@
   \item{standardize}{logical; standardize the coefficients
   before plotting (with the norm of the predictor). Default
   is \code{TRUE}.}
-
-  \item{reverse}{logical; should the X-axis be reversed
-  when \code{xvar="lambda"}? Default is \code{FALSE}.}
 
   \item{label}{vector indicating the names associated to
   the plotted variables. When specified, a legend is drawn

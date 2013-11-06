@@ -11,12 +11,10 @@ test_that("lasso_quad2lars", {
       lasso.quadru <- lasso(x,y, intercept=intercept, normalize=normalize,
                                   lambda1=lambda1, control=list(method="quadra"))
       quad <- list(coef   = as.matrix(lasso.quadru@coefficients),
-                   meanx  = lasso.quadru@meanx,
                    normx  = lasso.quadru@normx,
                    rss    = deviance(lasso.quadru))
 
       lars <- list(coef   = lasso.larsen$beta[-iols, ],
-                   meanx  = lasso.larsen$meanx,
                    normx  = lasso.larsen$normx,
                    rss    = lasso.larsen$RSS[-iols])
 

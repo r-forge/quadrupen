@@ -3,11 +3,11 @@
 \title{Cross-validation function for quadrupen fitting methods.}
 \usage{
   crossval(x, y,
-    penalty = c("elastic.net", "lasso", "bounded.reg"),
+    penalty = c("elastic.net", "lasso", "bounded.reg", "ridge"),
     K = 10,
     folds = split(sample(1:nrow(x)), rep(1:K, length = nrow(x))),
-    lambda2 = 0.01, verbose = TRUE,
-    mc.cores = detectCores(), ...)
+    lambda2 = switch(penalty, ridge = 10^seq(-2, 2, len = 100), 10^seq(-2, 0, len = 20)),
+    verbose = TRUE, mc.cores = detectCores(), ...)
 }
 \arguments{
   \item{penalty}{a string for the fitting procedure used
@@ -29,13 +29,12 @@
   folds are used for each values of \code{lambda2}.}
 
   \item{lambda2}{tunes the \eqn{\ell_2}{l2}-penalty
-  (ridge-like) of the fit. If none is provided, the default
-  scalar value of the corresponding fitting method is used
-  and a simple CV is performed. If a vector of values is
-  given, double cross-validation is performed (both on
-  \code{lambda1} and \code{lambda2}, using the same folds
+  (ridge-like) of the fit. If none is provided, a vector of
+  values is generated and a CV is performed on a grid of
+  \code{lambda2} and \code{lambda1}, using the same folds
   for each \code{lambda2}). Ignored when \code{penalty}
-  equals \code{"lasso"}.}
+  equals \code{"lasso"}. CV is only performed on
+  \code{lambda2} when the \code{ridge} penalty is used.}
 
   \item{verbose}{logical; indicates if the progression (the
   current lambda2) should be displayed. Default is
@@ -55,12 +54,9 @@
   is available.
 }
 \description{
-  Function that computes K-fold (double) cross-validated
-  error of a \code{quadrupen} fit. If no \code{lambda2} is
-  provided, simple cross validation on the \code{lambda1}
-  parameter is performed. If a vector \code{lambda2} is
-  passed as an argument, double cross-validation is
-  performed.
+  Function that computes K-fold cross-validated error of a
+  \code{quadrupen} fit, possibly on a grid of
+  \code{lambda1,lambda2}.
 }
 \note{
   If the user runs the fitting method with option
@@ -94,13 +90,13 @@ y <- 10 + x \%*\% beta + rnorm(n,0,10)
 
 ## Use fewer lambda1 values by overwritting the default parameters
 ## and cross-validate over the sequences lambda1 and lambda2
-cv.double <- crossval(x,y, lambda2=10^seq(2,-2,len=50), nlambda1=50)
+cv.grid <- crossval(x,y, lambda2=10^seq(2,-2,len=50), nlambda1=50)
 ## Rerun simple cross-validation with the appropriate lambda2
 cv.10K <- crossval(x,y, lambda2=slot(cv.double, "lambda2.min"))
 ## Try leave one out also
 cv.loo <- crossval(x,y, K=n, lambda2=slot(cv.double, "lambda2.min"))
 
-plot(cv.double)
+plot(cv.grid)
 plot(cv.10K)
 plot(cv.loo)
 

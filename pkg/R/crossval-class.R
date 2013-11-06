@@ -16,6 +16,9 @@
 ##' minimum.}
 ##' \item{\code{lambda2.min}:}{level of \eqn{\lambda_2}{lambda2} that minimizes the
 ##' error estimated by cross-validation.}
+##' \item{\code{lambda2.1se}:}{largest level of \eqn{\lambda_2}{lambda2}
+##'the cross-validated error is within 1 standard error of the
+##' minimum (only relevant for ridge regression).}
 ##' \item{\code{cv.error}:}{a data frame containing the mean
 ##' cross-validated error and its associated standard error for each
 ##' values of \code{lambda1} and \code{lambda2}.}
@@ -54,6 +57,7 @@ setClass("cvpen",
      lambda1.min = "lambda",
      lambda1.1se = "lambda",
      lambda2.min = "lambda",
+     lambda2.1se = "lambda",
      cv.error    = "data.frame",
      folds       = "list",
      beta.min    = "numeric",
@@ -78,7 +82,6 @@ setClass("cvpen",
 ##' @param log.scale logical; indicates if a log-scale should be used
 ##' when \code{xvar="lambda"}. Ignored for 2D cross-validation plot.
 ##' @param plot logical; indicates if the graph should be plotted. Default is \code{TRUE}.
-##' @param reverse logical; should the X-axis by reversed when \code{xvar=lambda}? Default is FALSE.  Ignored for 2D cross-validation plot.
 ##' @param ... used for S4 compatibility.
 ##' @return a \pkg{ggplot2} object which can be plotted via the \code{print}
 ##' method.
@@ -126,11 +129,12 @@ setClass("cvpen",
 ##' @import ggplot2 scales grid
 ##' @export
 setMethod("plot", "cvpen", definition =
-  function(x, y, log.scale=TRUE, reverse=FALSE, plot=TRUE, main = "Cross-validation error", ...) {
+  function(x, y, log.scale=TRUE, plot=TRUE, main = "Cross-validation error", ...) {
 
     K <- length(x@folds)
     n <- length(unlist(x@folds))
-    if (length(x@lambda2) > 1) {
+    if (length(x@lambda2) > 1 & !is.null(x@lambda1)) {
+
       d <- ggplot(data=x@cv.error, aes(x=lambda1, y=lambda2, z=mean))
       d <- d + geom_tile(aes(fill=mean)) + stat_contour(size=0.2, binwidth=diff(range(x@cv.error$mean))/10) + ggtitle(main)
       d <- d + scale_x_continuous(trans=log10_trans()) + xlab(expression(log[10](lambda[1])))
@@ -139,30 +143,30 @@ setMethod("plot", "cvpen", definition =
       in.1se <- which(x@cv.error$mean - x@cv.error$serr <= min(x@cv.error$mean))
       d <- d + stat_contour(alpha=0.5, colour="#CCCCCC", size=0.65, breaks=quantile(x@cv.error$mean[in.1se], probs=seq(0,1,len=6)))
     } else {
+      
       ## SIMPLE CROSS-VALIDATION GRAPH
-      if (log.scale) {
-        x@cv.error$lambda1 <- log10(x@cv.error$lambda1)
-      }
-      d <- ggplot(x@cv.error, aes(x=lambda1,y=mean)) + ylab("Mean square error") + geom_point(alpha=0.3)
+      d <- ggplot(x@cv.error, aes(x=lambda,y=mean)) + ylab("Mean square error") + geom_point(alpha=0.3)
       d <- d + geom_smooth(aes(ymin=mean-serr, ymax=mean+serr), data=x@cv.error, alpha=0.2, stat="identity")
-      if (reverse==TRUE) {
-        d <- d + scale_x_reverse()
-      }
-      if (log.scale) {
-        d <- d + xlab(expression(log[10](lambda[1])))
-        d <- d + annotation_logticks(sides="b")
-      } else {
-        d <- d + xlab( expression(lambda[1]) )
-      }
-      if (log.scale) {
-        lambda <- data.frame(xval=log10(c(x@lambda1.min,x@lambda1.1se)),
+
+      ## ridge or not (meaning working on lambda1 or lambda2)?
+      if (is.null(x@lambda1)) {
+        xlab <- ifelse(log.scale,expression(log[10](lambda[2])),expression(lambda[2]))        
+        lambda <- data.frame(xval=c(x@lambda2.min,x@lambda2.1se),
                              lambda.choice=factor(c("min. MSE","1-se rule")))
       } else {
+        xlab <- ifelse(log.scale,expression(log[10](lambda[1])),expression(lambda[1]))
         lambda <- data.frame(xval=c(x@lambda1.min,x@lambda1.1se),
                              lambda.choice=factor(c("min. MSE","1-se rule")))
       }
+      d <- d + xlab(xlab)
+      
+      if (log.scale) {
+        d <- d + scale_x_log10() + annotation_logticks(sides="b")
+      }
+      
       d <- d + ggtitle(main) +
-        geom_vline(data=lambda, aes(xintercept=xval,colour=lambda.choice), linetype="dashed",  alpha=0.5, show_guide=TRUE)
+        geom_vline(data=lambda, aes(xintercept=xval,colour=lambda.choice),
+                   linetype="dashed",  alpha=0.5, show_guide=TRUE)
     }
     ## DO THE PLOT
     if (plot) {print(d)}

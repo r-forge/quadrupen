@@ -22,9 +22,13 @@
   error is within 1 standard error of the minimum.}
   \item{\code{lambda2.min}:}{level of
   \eqn{\lambda_2}{lambda2} that minimizes the error
-  estimated by cross-validation.} \item{\code{cv.error}:}{a
-  data frame containing the mean cross-validated error and
-  its associated standard error for each values of
+  estimated by cross-validation.}
+  \item{\code{lambda2.1se}:}{largest level of
+  \eqn{\lambda_2}{lambda2} the cross-validated error is
+  within 1 standard error of the minimum (only relevant for
+  ridge regression).} \item{\code{cv.error}:}{a data frame
+  containing the mean cross-validated error and its
+  associated standard error for each values of
   \code{lambda1} and \code{lambda2}.}
   \item{\code{folds}:}{list of \code{K} vectors indicating
   the folds used for cross-validation.}

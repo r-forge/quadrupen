@@ -10,7 +10,8 @@
 ##'
 ##' @param penalty a string for the fitting procedure used for
 ##' cross-validation. Either \code{\link{elastic.net}},
-##' \code{\link{lasso}} or \code{"bounded.reg"}.
+##' \code{\link{lasso}} or \code{"bounded.reg"}. this is of course
+##' useless for \code{"ridge"} regression.
 ##'
 ##' @param subsamples integer indicating the number of subsamplings
 ##' used to estimate the selection probabilities. Default is 100.

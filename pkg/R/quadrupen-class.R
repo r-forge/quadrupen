@@ -122,7 +122,6 @@ setClass("quadrupen",
 setMethod("print", "quadrupen", definition =
    function(x, ...) {
      ncoef <- ncol(x@coefficients)
-     if (is.null(ncoef)) {ncoef <- ncol(x@coefficients)}
      if (!is.null(x@naive)) {
        if (x@naive) {
          cat("Linear regression with", x@penalty, "penalizer, no rescaling of the coefficients (naive).\n")
@@ -132,30 +131,35 @@ setMethod("print", "quadrupen", definition =
      } else {
        cat("Linear regression with", x@penalty, "penalizer.\n")
      }
-     if (any(x@intercept != 0)) {
+     if (x@intercept) {
        cat("- number of coefficients:", ncoef,"+ intercept\n")
      } else {
        cat("- number of coefficients:", ncoef,"(no intercept)\n")
      }
-     if (length(x@lambda1) > 1) {
-       cat("- penalty parameter lambda1:", length(x@lambda1), "points from",
-           format(max(x@lambda1), digits = 3),"to",
-           format(min(x@lambda1), digits = 3),"\n")
-     } else {
-       cat("- penalty parameter lambda1:", x@lambda1, "\n")
-     }
-     if (!is.null(x@lambda2)){
-       if (length(x@lambda2) > 1) {
-         cat("- penalty parameter lambda2:", length(x@lambda2), "points from",
-             format(max(x@lambda2), digits = 3),"to",
-             format(min(x@lambda2), digits = 3),"\n")
-       } else {
-         cat("- penalty parameter lambda2:", x@lambda2, "\n")
-       }
-     }
+
+     major <- major.pen(x)
+     minor <- minor.pen(x)
+     cat("- penalty parameter ",names(major), ": ", length(major), " points from ",
+         format(max(major), digits = 3)," to ",
+         format(min(major), digits = 3),"\n", sep="")
+     cat("- penalty parameter ",names(minor),": ", minor, "\n", sep="")     
+     
      invisible(x)
    }
 )
+
+## this is simply an internal basic function to get vector if "leading" penalties (either l1 or l2)
+setGeneric("major.pen", function(object) {standardGeneric("major.pen")})
+setMethod("major.pen", "quadrupen", definition =
+   function(object) {
+     switch(object@penalty, "ridge" = data.frame(lambda2=object@lambda2), data.frame(lambda1=object@lambda1))     
+   })
+## this is simply an internal basic function to get vector if "minor" penalties (either l1 or l2)
+setGeneric("minor.pen", function(object) {standardGeneric("minor.pen")})
+setMethod("minor.pen", "quadrupen", definition =
+   function(object) {
+     switch(object@penalty, "ridge" = setNames(object@lambda1, "lambda1"), setNames(object@lambda2, "lambda2"))
+   })
 
 setMethod("show", "quadrupen", definition =
    function(object) {print(object)}
@@ -218,8 +222,6 @@ setMethod("deviance", "quadrupen", definition =
 ##' when \code{xvar="lambda"}. Default is \code{TRUE}.
 ##' @param standardize logical; standardize the coefficients before
 ##' plotting (with the norm of the predictor). Default is \code{TRUE}.
-##' @param reverse logical; should the X-axis be reversed when
-##' \code{xvar="lambda"}? Default is \code{FALSE}.
 ##' @param label vector indicating the names associated to the plotted
 ##' variables. When specified, a legend is drawn in order to identify
 ##' each variable. Only relevant when the number of predictor is
@@ -268,11 +270,11 @@ setMethod("deviance", "quadrupen", definition =
 setMethod("plot", "quadrupen", definition =
    function(x, y, xvar = "lambda",
             main = paste(slot(x, "penalty")," path", sep=""),
-            log.scale = TRUE, standardize=TRUE, reverse=FALSE,
-            labels = NULL, plot = TRUE, ...) {
-
-     if (length(x@lambda1 & x@lambda2) == 1) {
-       stop("Not available when length(lambda1) == 1 & length(lambda2) == 1")
+            log.scale = TRUE, standardize=TRUE, labels = NULL, plot = TRUE, ...) {
+     
+     lambda <- as.numeric(unlist(major.pen(x)))
+     if (length(lambda) == 1) {
+       stop("Not available when the leading vector of penalties boild down to a scalar.")
      }
 
      nzeros <- which(colSums(x@coefficients) != 0)
@@ -290,16 +292,10 @@ setMethod("plot", "quadrupen", definition =
      if (xvar == "fraction") {
        xv <-  apply(abs(beta),1,sum)/max(apply(abs(beta),1,sum))
      } else {
-       if (x@penalty == "ridge") {
-         xv <- x@lambda2
-       } else {
-         xv <- x@lambda1
-       }
-     }
-     if (log.scale & xvar=="lambda") {
-       xv <- log10(xv)
+       xv <- lambda
      }
 
+     ## Creating the data.frame fior ggploting purposes
      data.coef <- melt(data.frame(xvar=xv, beta=beta),id="xvar")
      if (is.null(labels)) {
        data.coef$labels <- factor(rep(nzeros, each=length(xv)))
@@ -313,16 +309,19 @@ setMethod("plot", "quadrupen", definition =
        }
      }
      colnames(data.coef) <- c("xvar","var","coef", "variables")
-
      d <- ggplot(data.coef,aes(x=xvar,y=coefficients, colour=variables, group=var)) +
-       geom_line(aes(x=xvar,y=coef)) +
-         labs(x=ifelse(xvar=="fraction",expression(paste("|",beta[lambda],"|",{}[1]/max[lambda],"|",beta[lambda],"|",{}[1],sep="")),
-                ifelse(log.scale,expression(log[10](lambda)),expression(lambda))),
-              y=ifelse(standardize, "standardized coefficients","coefficients")) + ggtitle(main) +
-           geom_hline(yintercept=0, alpha=0.5, linetype="dotted")
-     if (xvar=="lambda" & reverse==TRUE) {
-       d <- d + scale_x_reverse()
+       geom_line(aes(x=xvar,y=coef)) +  geom_hline(yintercept=0, alpha=0.5, linetype="dotted") +
+         ylab(ifelse(standardize, "standardized coefficients","coefficients")) + ggtitle(main)
+               
+     if (xvar=="lambda") {
+       d <- d + xlab(switch(x@penalty, "ridge" = ifelse(log.scale,expression(log[10](lambda[2])),expression(lambda[2])),
+                            ifelse(log.scale,expression(log[10](lambda[1])),expression(lambda[1]))))
+       if (log.scale) 
+         d <- d + scale_x_log10() + annotation_logticks(sides="b")         
+     } else {
+       d <- d + xlab(expression(paste("|",beta[lambda[1]],"|",{}[1]/max[lambda[1]],"|",beta[lambda[1]],"|",{}[1],sep="")))
      }
+     
      if (is.null(labels)) {
        d <- d + theme(legend.position="none")
      } else {
@@ -335,7 +334,6 @@ setMethod("plot", "quadrupen", definition =
 
    }
 )
-
 
 ##' Penalized criteria based on estimation of degrees of freedom
 ##'
@@ -437,10 +435,11 @@ setMethod("criteria", "quadrupen", definition =
             log.scale=TRUE, xvar = "lambda", plot=TRUE) {
 
      betas <- object@coefficients
+     lambda <- as.numeric(unlist(major.pen(object)))
 
      n <- nrow(residuals(object))
      p <- ncol(betas)
-
+     
      ## compute the penalized criteria
      if (is.null(sigma)) {
        crit <- sapply(penalty, function(pen) n*log(deviance(object)) + pen * object@df)
@@ -449,9 +448,7 @@ setMethod("criteria", "quadrupen", definition =
      }
 
      ## put together all relevant information about those criteria
-     criterion <- data.frame(crit, df=object@df, lambda=object@lambda1,
-                             fraction = apply(abs(betas),1,sum)/max(apply(abs(betas),1,sum)))
-     rownames(criterion) <- 1:nrow(criterion)
+     criterion <- data.frame(crit, df=object@df, lambda=lambda, fraction = apply(abs(betas),1,sum)/max(apply(abs(betas),1,sum)), row.names=1:nrow(crit))
 
      ## recover the associated vectors of parameters
      beta.min  <- t(betas[apply(crit, 2, which.min), ])
@@ -461,22 +458,24 @@ setMethod("criteria", "quadrupen", definition =
      ## plot the critera, if required
      if (plot) {
 
-       if (length(object@lambda1) == 1) {
-         stop("Not available when length(lambda1) == 1")
+       if (length(lambda) == 1) {
+         stop("Not available when the leading vector of penalties boild down to a scalar.")
        }
 
-       data.plot <- melt(criterion, id=xvar, measure=1:length(penalty), variable.name="criterion")
-       colnames(data.plot)[1] <- "xvar"
-
+       data.plot <- melt(criterion, id=xvar, measure=1:length(penalty), variable.name="criterion", value.name="value")
+       rownames(data.plot) <- 1:nrow(data.plot)
+       
+       colnames(data.plot)[1] <- "xvar"       
+       
        xlab <- switch(xvar,
                       "fraction" = expression(paste("|",beta[lambda[1]],"|",{}[1]/max[lambda[1]],"|",beta[lambda[1]],"|",{}[1],sep="")),
                       "df" = "Estimated degrees of freedom",
-                      ifelse(log.scale,expression(log[10](lambda[1])),expression(lambda[1])))
+                      switch(object@penalty, "ridge" = ifelse(log.scale,expression(log[10](lambda[2])),expression(lambda[2])), 
+                             ifelse(log.scale,expression(log[10](lambda[1])),expression(lambda[1])) ) )
 
        d <- ggplot(data.plot, aes(x=xvar, y=value, colour=criterion, group=criterion)) +
          geom_line(aes(x=xvar,y=value)) + geom_point(aes(x=xvar,y=value)) +
-           labs(x=xlab, y="criterion's value",
-                title=paste("Information Criteria for a", slot(object, "penalty"),"fit"))
+           labs(x=xlab, y="criterion's value",  title=paste("Information Criteria for a", slot(object, "penalty"),"fit"))
 
        if (log.scale & xvar=="lambda") {
          d <- d + scale_x_log10()

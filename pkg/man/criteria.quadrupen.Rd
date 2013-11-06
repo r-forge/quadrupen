@@ -1,8 +1,8 @@
 \docType{methods}
 \name{criteria,quadrupen-method}
 \alias{criteria}
-\alias{criteria,quadrupen-method}
 \alias{criteria.quadrupen}
+\alias{criteria,quadrupen-method}
 \title{Penalized criteria based on estimation of degrees of freedom}
 \arguments{
   \item{object}{output of a fitting procedure of the

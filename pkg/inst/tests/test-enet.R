@@ -13,11 +13,9 @@ test_that("enet_quad2elasticnet", {
                                lambda1=lambda1, lambda2=lambda2, naive=naive)
 
     quad <- list(coef   = as.matrix(enet.quadru@coefficients),
-                 meanx  = enet.quadru@meanx,
                  normx  = enet.quadru@normx)
 
     enet <- list(coef   = predict(enet.larsen, type="coefficients",naive=naive)$coefficients[-iols,],
-                 meanx  = enet.larsen$meanx,
                  normx  = enet.larsen$normx)
 
     return(list(quad=quad, enet = enet))

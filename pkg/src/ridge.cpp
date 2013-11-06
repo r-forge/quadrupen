@@ -66,7 +66,7 @@ void RIDGE::LetsRoll() {
   arma::mat U   ; // left singular vectors of X
   arma::mat V   ; // right singular vectors of X
   svd_econ(U, eta, V, x*cinv) ;
-
+  
   arma::mat cinvV = cinv * V ;
   arma::mat Uty = trans(U) * y ;
 

@@ -41,6 +41,17 @@ default.args <- function(penalty,n,p,user) {
            control   = list(),
            checkargs = TRUE),
          
+         "ridge" = list(
+           lambda2    = NULL,
+           struct     = NULL,
+           intercept  = TRUE,
+           normalize  = TRUE,
+           nlambda2   = 100 ,
+           lambda.min = ifelse(n<=p,0.01,1e-4),
+           lambda.max = 100 ,
+           control    = list(),
+           checkargs  = TRUE),
+
          "bounded.reg" = list(
            lambda1   = NULL,
            lambda2   = 0.01,
