@@ -142,8 +142,8 @@ setMethod("print", "quadrupen", definition =
      cat("- penalty parameter ",names(major), ": ", length(major), " points from ",
          format(max(major), digits = 3)," to ",
          format(min(major), digits = 3),"\n", sep="")
-     cat("- penalty parameter ",names(minor),": ", minor, "\n", sep="")     
-     
+     cat("- penalty parameter ",names(minor),": ", minor, "\n", sep="")
+
      invisible(x)
    }
 )
@@ -152,7 +152,7 @@ setMethod("print", "quadrupen", definition =
 setGeneric("major.pen", function(object) {standardGeneric("major.pen")})
 setMethod("major.pen", "quadrupen", definition =
    function(object) {
-     switch(object@penalty, "ridge" = data.frame(lambda2=object@lambda2), data.frame(lambda1=object@lambda1))     
+     switch(object@penalty, "ridge" = data.frame(lambda2=object@lambda2), data.frame(lambda1=object@lambda1))
    })
 ## this is simply an internal basic function to get vector if "minor" penalties (either l1 or l2)
 setGeneric("minor.pen", function(object) {standardGeneric("minor.pen")})
@@ -271,7 +271,7 @@ setMethod("plot", "quadrupen", definition =
    function(x, y, xvar = "lambda",
             main = paste(slot(x, "penalty")," path", sep=""),
             log.scale = TRUE, standardize=TRUE, labels = NULL, plot = TRUE, ...) {
-     
+
      lambda <- as.numeric(unlist(major.pen(x)))
      if (length(lambda) == 1) {
        stop("Not available when the leading vector of penalties boild down to a scalar.")
@@ -312,16 +312,16 @@ setMethod("plot", "quadrupen", definition =
      d <- ggplot(data.coef,aes(x=xvar,y=coefficients, colour=variables, group=var)) +
        geom_line(aes(x=xvar,y=coef)) +  geom_hline(yintercept=0, alpha=0.5, linetype="dotted") +
          ylab(ifelse(standardize, "standardized coefficients","coefficients")) + ggtitle(main)
-               
+
      if (xvar=="lambda") {
        d <- d + xlab(switch(x@penalty, "ridge" = ifelse(log.scale,expression(log[10](lambda[2])),expression(lambda[2])),
                             ifelse(log.scale,expression(log[10](lambda[1])),expression(lambda[1]))))
-       if (log.scale) 
-         d <- d + scale_x_log10() + annotation_logticks(sides="b")         
+       if (log.scale)
+         d <- d + scale_x_log10() + annotation_logticks(sides="b")
      } else {
        d <- d + xlab(expression(paste("|",beta[lambda[1]],"|",{}[1]/max[lambda[1]],"|",beta[lambda[1]],"|",{}[1],sep="")))
      }
-     
+
      if (is.null(labels)) {
        d <- d + theme(legend.position="none")
      } else {
@@ -439,21 +439,26 @@ setMethod("criteria", "quadrupen", definition =
 
      n <- nrow(residuals(object))
      p <- ncol(betas)
-     
+
+     ## Compute generalized cross-validation
+     GCV <- deviance(object)/(n*(1+object@df/n))^2
+
      ## compute the penalized criteria
      if (is.null(sigma)) {
-       crit <- sapply(penalty, function(pen) n*log(deviance(object)) + pen * object@df)
+       crit <- sapply(penalty, function(pen) log(deviance(object)) + pen * object@df/n)
      } else {
        crit <- sapply(penalty, function(pen) deviance(object)/n + pen * object@df/ n * sigma^2)
      }
 
+
      ## put together all relevant information about those criteria
-     criterion <- data.frame(crit, df=object@df, lambda=lambda, fraction = apply(abs(betas),1,sum)/max(apply(abs(betas),1,sum)), row.names=1:nrow(crit))
+     criterion <- data.frame(crit, GCV=GCV, df=object@df, lambda=lambda, fraction = apply(abs(betas),1,sum)/max(apply(abs(betas),1,sum)), row.names=1:nrow(crit))
 
      ## recover the associated vectors of parameters
      beta.min  <- t(betas[apply(crit, 2, which.min), ])
+##     beta.min <- cbind2(beta.min, betas[, which.min(GCV)])
      if (!is.null(dim(beta.min)))
-       colnames(beta.min) <- names(penalty)
+         colnames(beta.min) <- names(penalty)
 
      ## plot the critera, if required
      if (plot) {
@@ -464,13 +469,13 @@ setMethod("criteria", "quadrupen", definition =
 
        data.plot <- melt(criterion, id=xvar, measure=1:length(penalty), variable.name="criterion", value.name="value")
        rownames(data.plot) <- 1:nrow(data.plot)
-       
-       colnames(data.plot)[1] <- "xvar"       
-       
+
+       colnames(data.plot)[1] <- "xvar"
+
        xlab <- switch(xvar,
                       "fraction" = expression(paste("|",beta[lambda[1]],"|",{}[1]/max[lambda[1]],"|",beta[lambda[1]],"|",{}[1],sep="")),
                       "df" = "Estimated degrees of freedom",
-                      switch(object@penalty, "ridge" = ifelse(log.scale,expression(log[10](lambda[2])),expression(lambda[2])), 
+                      switch(object@penalty, "ridge" = ifelse(log.scale,expression(log[10](lambda[2])),expression(lambda[2])),
                              ifelse(log.scale,expression(log[10](lambda[1])),expression(lambda[1])) ) )
 
        d <- ggplot(data.plot, aes(x=xvar, y=value, colour=criterion, group=criterion)) +

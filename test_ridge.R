@@ -9,9 +9,9 @@ diag(Sigma) <- 1
 n <- 50
 x <- as.matrix(matrix(rnorm(95*n),n,95) %*% chol(Sigma))
 y <- 10 + x %*% beta + rnorm(n,0,10)
-
-
 p <- ncol(x)
+
+
 ## neighborhood prior
 C <- bandSparse(p,k=0:1,diagonals=list(rep(1,p),rep(-1,p-1)))
 L1 <-  t(C) %*% C

@@ -37,4 +37,5 @@ Collate:
     'utils.R'
     'lasso.R'
     'ridge.R'
+    'group_lasso.R'
 Packaged: 2013-03-25 19:41:00 UTC; jchiquet

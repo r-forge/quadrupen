@@ -116,7 +116,7 @@ crossval <- function(x,
   penalty <- match.arg(penalty)
   fit.func <- switch(penalty,
                      "elastic.net" = elastic.net,
-                     "lasso"       = lasso      , 
+                     "lasso"       = lasso      ,
                      "bounded.reg" = bounded.reg,
                      "ridge"       = ridge)
   get.lambda1 <- switch(penalty,
@@ -127,7 +127,7 @@ crossval <- function(x,
 
   if (penalty == "lasso") {lambda2 <- NULL}
 
-  
+
   user <- list(...)
   defs <- default.args(penalty,nrow(x)-max(sapply(folds,length)),ncol(x),user)
   args <- modifyList(defs, user)
@@ -141,7 +141,7 @@ crossval <- function(x,
   if (penalty=="ridge") {
     major.lambda <- lambda2
   } else {
-    major.lambda <- args$lambda1    
+    major.lambda <- args$lambda1
   }
 
   ## =============================================================
@@ -159,7 +159,7 @@ crossval <- function(x,
       simple.cv(folds, x, y, fit.func, args, lambda2[i], mc.cores)
     }, simplify=FALSE)
     if(verbose){cat("\n")}
-    
+
     ## Recovering the best lambda1 and lambda2
     lambda1.cv <- sapply(1:length(lambda2), function(j) {
       cv.min <- min(cv[[j]]$mean)
@@ -190,10 +190,12 @@ crossval <- function(x,
   } else {
     ## SIMPLE CROSS-VALIDATION WORK
     if (penalty == "ridge") {
-      cat("\nCROSS-VALIDATION FOR ",penalty," REGULARIZER \n\n")
-      cat(length(folds),"-fold CV on the lambda2 grid.\n", sep="")
+      if (verbose) {
+        cat("\nCROSS-VALIDATION FOR ",penalty," REGULARIZER \n\n")
+        cat(length(folds),"-fold CV on the lambda2 grid.\n", sep="")
+      }
       cv <- simple.cv(folds, x, y, fit.func, args, lambda2, mc.cores)
-      
+
       ## Recovering the best lambda1 and lambda2
       lambda1.min <- 0
       lambda1.1se <- 0
@@ -208,14 +210,14 @@ crossval <- function(x,
       ind.max <- nrow(best.fit@coefficients)
       ind.min <- min(match(lambda2.min, major.lambda),ind.max)
       ind.1se <- min(match(lambda2.1se, major.lambda),ind.max)
-      
+
     } else {
       if (verbose) {
         cat("\nCROSS-VALIDATION FOR ",penalty," REGULARIZER \n\n")
         cat(length(folds),"-fold CV on the lambda1 grid, lambda2 is fixed.\n", sep="")
       }
       cv <- simple.cv(folds, x, y, fit.func, args, lambda2, mc.cores)
-      
+
       ## Recovering the best lambda1 and lambda2
       lambda1.min <- max(major.lambda[cv$mean <= min(cv$mean)], na.rm=TRUE)
       lambda1.1se <- max(major.lambda[cv$mean <(cv$mean+cv$serr+1e-5)[match(lambda1.min,major.lambda)]], na.rm=TRUE)
@@ -230,7 +232,7 @@ crossval <- function(x,
       ind.max <- nrow(best.fit@coefficients)
       ind.min <- min(match(lambda1.min, major.lambda),ind.max)
       ind.1se <- min(match(lambda1.1se, major.lambda),ind.max)
-      
+
     }
     cv <- data.frame(cv, lambda=major.lambda)
   }
@@ -271,7 +273,7 @@ simple.cv <- function(folds, x, y, fit.func, args, lambda2, mc.cores) {
     fold.err <- sweep(matrix(predict(fit,matrix(x[omit,], nrow=length(omit))), nrow=length(omit)), 1L, y[omit], check.margin = FALSE)^2
     if (ncol(fold.err) < length(args$lambda1) & length(args$lambda2 == 1)) {
       NAs <- length(args$lambda1)-ncol(fold.err)
-      fold.err <- cbind(fold.err, matrix(NA,nrow(fold.err),NAs))      
+      fold.err <- cbind(fold.err, matrix(NA,nrow(fold.err),NAs))
     }
     return(fold.err)
   }

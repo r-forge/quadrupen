@@ -3,6 +3,92 @@
 using namespace Rcpp;
 using namespace arma;
 
+vec grp_norm(vec x, uvec pk, int norm, int rep)  {
+
+  vec res ;
+  if (rep > 0) {
+    res = zeros<vec> (x.n_elem) ;
+  } else {
+    res = zeros<vec> (pk.n_elem) ;
+  }
+
+  int ind = 0;
+  double current_norm ;
+
+  switch (norm) {
+    // -1 is the convention for the sup norm
+  case -1 :
+    for (int k=0; k<pk.n_elem; k++) {
+      current_norm = as_scalar(max(abs(x.subvec(ind, ind + pk(k) - 1))));
+      if (rep > 0) {
+	res.subvec(ind, ind + pk(k) - 1) = current_norm*ones(pk(k));
+      } else {
+	res(k) = current_norm;
+      }
+      ind += pk(k);
+    }
+    break;
+  case 1 :
+    for (int k=0; k<pk.n_elem; k++) {
+      current_norm = as_scalar(sum(abs(x.subvec(ind, ind + pk(k) - 1))));
+      if (rep > 0) {
+	res.subvec(ind, ind + pk(k) - 1) = current_norm*ones(pk(k));
+      } else {
+	res(k) = current_norm;
+      }
+      ind += pk(k);
+    }
+    break;
+  case 2:
+    for (int k=0; k<pk.n_elem; k++) {
+      current_norm = as_scalar(sqrt(sum(pow(x.subvec(ind, ind + pk(k) - 1),2))));
+      if (rep > 0) {
+	res.subvec(ind, ind + pk(k) - 1) = current_norm*ones(pk(k));
+      } else {
+	res(k) = current_norm;
+      }
+      ind += pk(k);
+    }
+    break;
+  default:
+    for (int k=0; k<pk.n_elem; k++) {
+      current_norm = as_scalar(sqrt(sum(pow(x.subvec(ind, ind + pk(k) - 1),2))));
+      if (rep > 0) {
+	res.subvec(ind, ind + pk(k) - 1) = current_norm*ones(pk(k));
+      } else {
+	res(k) = current_norm;
+      }
+      ind += pk(k);
+    }
+    break;
+  }
+
+  return(res);
+}
+
+vec grp_sign(vec x, uvec pk)  {
+
+  vec signs   = zeros<vec>  (x.n_elem);
+  int ind = 0;
+  double eps = 1e-12;
+
+  vec norm_grp = grp_norm(x, pk, -1, 0) ;
+
+  for (int k=0; k<pk.n_elem; k++) {
+    for (int j=ind;j<(ind+pk.at(k));j++) {
+      if ((fabs(x(j)) - norm_grp(k)) < eps) {
+	if (x(j) > eps) {
+	  signs(j) = 1;
+	} else {
+	  signs(j) = -1;
+	}
+      }
+    }
+    ind += pk(k);
+  }
+  return(signs);
+}
+
 void cholupdate(mat &R , mat &XtX) {
   int p = XtX.n_cols;
 

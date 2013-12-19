@@ -40,6 +40,9 @@ inline sp_mat get_struct(SEXP STRUCT, double lambda2, vec penscale) {
   return(S) ;
 }
 
+vec grp_norm(vec x, uvec pk, int norm, int rep) ;
+vec grp_sign(vec x, uvec pk) ;
+
 double get_df_enet(double &lambda2, mat &R, mat &xAtxA, sp_mat &S, uvec &A, uword &fun) ;
 double get_df_breg(double &lambda2, mat &xtx, sp_mat &S, uvec &A) ;
 
