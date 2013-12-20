@@ -7,7 +7,7 @@
 #define _quadrupen_QUADRATIC_H
 
 #include <RcppArmadillo.h>
-#include "utils.h"
+#include "utils/utils.h"
 
 using namespace Rcpp;
 using namespace arma;

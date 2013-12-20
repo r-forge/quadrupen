@@ -49,11 +49,11 @@ SEXP ridge_cpp(SEXP X        , // matrix of features
   // COMPUTE THE PATH OF SOLUTIONS
   ridge.LetsRoll();
 
-  return List::create(Named("coefficients") = ridge.get_coef(),
-		      Named("mu")         = ridge.get_mu()    ,
-		      Named("normx")      = ridge.get_normx() ,
-		      Named("lambda2")    = ridge.get_lambda(),
-		      Named("df")         = ridge.get_df()    );
+  return List::create(Named("coefficients") = ridge.get_coef()  ,
+		      Named("mu")           = ridge.get_mu()    ,
+		      Named("normx")        = ridge.get_normx() ,
+		      Named("lambda2")      = ridge.get_lambda(),
+		      Named("df")           = ridge.get_df()    );
 
 }
 

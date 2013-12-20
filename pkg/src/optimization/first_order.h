@@ -6,7 +6,7 @@
 #define _quadrupen_FIRSTORDER_H
 
 #include <RcppArmadillo.h>
-#include "utils.h"
+#include "utils/utils.h"
 
 using namespace Rcpp;
 using namespace arma;

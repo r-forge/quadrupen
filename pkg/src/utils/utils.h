@@ -64,10 +64,10 @@ void remove_var_enet(int &nbr_in, uvec &are_in, vec &betaA, uvec &A, mat &xtxAS,
 template <typename any_mat>
 void standardize(any_mat &x, vec &y, bool &intercept, bool &normalize, vec &penscale,
 		 vec &xty, vec &normx, double &normy, vec &xbar, double &ybar) {
-
+  
   uword n = x.n_rows;
   uword p = x.n_cols;
-
+  
   if (intercept == 1) {
     xbar = trans(rowvec(mean(x, 0)));
     ybar = mean(y) ;

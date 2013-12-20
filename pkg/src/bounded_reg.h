@@ -13,11 +13,7 @@
 #define ARMA_HAVE_GETTIMEOFDAY
 #endif
 
-#include <sys/time.h>
-#include <RcppArmadillo.h>
-#include "utils.h"
-#include "quadratic.h"
-#include "first_order.h"
+#include "quadrupen_headers.hpp"
 
 RcppExport SEXP bounded_reg(SEXP X        ,
 			    SEXP Y        ,
