@@ -170,7 +170,7 @@ SEXP elastic_net(SEXP BETA0    ,
 
     // dual norm of gradient for unactive variable
     grd_norm = abs(grd) - lambda1[m] ;
-    // dual norm of gradient for active variables
+    // gradient for active variables
     grd_norm.elem(A) = abs(grd.elem(A) + lambda1[m] * sign(betaA)) ;
     // variable associated with the highest optimality violation
     max_grd[m] = grd_norm.max(var_in) ;

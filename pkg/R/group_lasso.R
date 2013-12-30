@@ -35,8 +35,7 @@
 ##' group-Lasso.
 ##'
 ##' @param penscale vector with real positive values that weight the
-##' \eqn{\ell_1}{l1}-penalty of each feature. Default set all weights
-##' to 1.
+##' \eqn{\ell_1}{l1}-penalty of each feature.
 ##'
 ##' @param struct matrix structuring the coefficients, possibly
 ##' sparsely encoded. Must be at least positive semidefinite (this is
@@ -76,9 +75,8 @@
 ##' \code{min(nrow(x),ncol(x))}. Use with care, as it considerably
 ##' changes the computation time.
 ##'
-##' @param beta0 a starting point for the vector of parameter. When
-##' \code{NULL} (the default), will be initialized at zero. May save
-##' time in some situation.
+##' @param beta0 a starting point for the vector of parameter. The
+##' default is a vector of zeros. May save time in some situation.
 ##'
 ##' @param control list of argument controlling low level options of
 ##' the algorithm --use with care and at your own risk-- :
@@ -148,7 +146,7 @@ group.lasso <- function(x,
                         type        = 2, ## could be "inf" or 2, default is 2
                         lambda1   = NULL,
                         lambda2   = 0.01,
-                        penscale  = switch(type, "2" = sqrt(pk), "inf" = rep(1,length(pk))),
+                        penscale  = switch(as.character(type), "2" = rep(sqrt(pk), pk), "inf" = rep(1,p)),
                         struct    = NULL,
                         intercept = TRUE,
                         normalize = TRUE,
@@ -156,14 +154,13 @@ group.lasso <- function(x,
                         nlambda1  = ifelse(is.null(lambda1),100,length(lambda1)),
                         min.ratio = ifelse(n<=p,1e-2,1e-4),
                         max.feat  = ifelse(lambda2<1e-2,min(n,p),min(4*n,p)),
-                        beta0     = NULL,
+                        beta0     = rep(0,p),
                         control   = list(),
                         checkargs = TRUE) {
 
   p <- ncol(x) # problem size
   n <- nrow(x) # sample size
   pk <- tabulate(group) # group size
-
 
   ## ===================================================
   ## CHECKS TO (PARTIALLY) AVOID CRASHES OF THE C++ CODE
@@ -178,7 +175,7 @@ group.lasso <- function(x,
       stop("y has to be of type 'numeric'")
     if(n != length(y))
       stop("x and y have not correct dimensions")
-    if(length(penscale) != length(pk))
+    if(length(penscale) != p)
       stop("penscale must have ncol(x) entries")
     if (any(penscale <= 0))
       stop("weights in penscale must be positive")

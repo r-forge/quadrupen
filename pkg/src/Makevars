@@ -1,6 +1,6 @@
-SOURCES=$(wildcard utils/*.cpp optimization/*.cpp)
+SOURCES=$(wildcard utils/*.cpp optimization/*.cpp tmp_cpp/*.cpp)
 
-OBJECTS = ridge.o elastic_net.o bounded_reg.o group_lasso.o $(SOURCES:.cpp=.o)
+OBJECTS = ridge.o elastic_net.o bounded_reg.o group_lasso_main.o $(SOURCES:.cpp=.o)
 
 PKG_CPPFLAGS=-I.
 
