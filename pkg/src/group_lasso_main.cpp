@@ -37,30 +37,20 @@ SEXP group_lasso(SEXP BETA0    ,
   // ==============================================================
   // INSTANTIATION OF THE REQUIRED OBJECTS
 
-  // data
+  // data instantiation, normalization and basics pretreatments
   REGRESSION_DATA data(X, Y, INTERCEPT, NORMALIZE, PENSCALE, WEIGHTS) ;
-  // path
-  PATH path(MAXFEAT) ;
-  // group_Lasso object: group structure, active set (groupwise), norm and dual norm.  
-  // L1_NORM lasso ;
-  // LINF_NORM bounded ;
-  L1L2_NORM grpLasso1(PK) ;
-  // L1LINF_NORM grpLasso2(PK) ;
-  // COOP_NORM coopLasso(PK) ;
-
-  PENALTY lasso(PK) ;
-  lasso.setPenalty("l1") ;
-    
-  // ==============================================================
-  // DATA NORMALIZATION AND BASICS PRETREATMENTS
   data.standardize();
 
-  lasso.elt_norm(data.get_xty()).print();
+  PENALTY lasso, bounded, grpLasso1(PK), grpLasso2(PK), coopLasso(PK) ;
+  grpLasso1.setPenalty("l1l2") ;
 
-  // ==============================================================
-  // GET VALUES OF THE PENALTY LEADING THE PATH
-  path.grid_penLevels(LAMBDA1, NLAMBDA1, MINRATIO, grpLasso1.dual_norm(data.get_xty()));
-  
+ // path instantiation and generation of the grid of lambda values
+  PATH path(MAXFEAT) ;
+  path.grid_penLevels(LAMBDA1, NLAMBDA1, MINRATIO, grpLasso1.dual_norm(data.XTY()));
+
+  // ACTIVE SET + current Gram matrix
+  ACTIVE_DATA activeSet(BETA0, data);
+
   // ==============================================================
   // COMPUTE THE PATH OF SOLUTIONS
   // _____________________________________________________________
@@ -68,14 +58,14 @@ SEXP group_lasso(SEXP BETA0    ,
   // START THE LOOP OVER THE LEADING PENALTY
   // timer.tic();
   uword npen = path.get_penLevels().n_elem;
+  bool verbose = as<bool>(VERBOSE) ;
+  double thres = as<double>(EPS) ;
+
+  // vec dualGap  = zeros(npen) ;
+  // vec itActive = zeros(npen) ;
+
   // uword maxIter = as<uword>(MAXITER) ;
   uword grpIn ;
-  bool verbose = as<bool>(VERBOSE) ;
-  // vec dualGap = zeros(npen) ;
-  // vec itActive = zeros(npen) ;
-  // double eps = as<double>(EPS) ;
-
-  ACTIVE_SET_GROUPWISE active_set(BETA0, PK);
 
   // vec dualGap.zeros(get_penlevels().n_elem) ;
   for (int m=0; m<npen; m++) {
@@ -85,16 +75,17 @@ SEXP group_lasso(SEXP BETA0    ,
     // START THE ACTIVE SET ALGORITHM
     // _____________________________________________________________
     //
+
     // OPTIMALITY TESTING AT INITIALIZATION
 
     // group associated with the highest optimality violation
     // dualGap[m] = grpLasso.get_dist2opt(path.get_penLevels()[m]).max(grpIn) ;
 
     // while (dualGap[m] > eps & itActive[m] < maxIter) {
-      // _____________________________________________________________
-      //
-      // (1) GROUP ACTIVATION IF APPLICABLE
-      // ____________________________________________________________
+    // _____________________________________________________________
+    //
+    // (1) GROUP ACTIVATION IF APPLICABLE
+    // ____________________________________________________________
 
     //   if (is_active_group[grpIn] == 0) {
     // 	add_group(grpIn) ;
@@ -151,3 +142,19 @@ SEXP group_lasso(SEXP BETA0    ,
 //   dualGap.zeros(penalty.n_elem)  ; // distance to optimality
 //   is_active_group.zeros(K)       ;
 
+  // this works:
+  // lasso.setPenalty("l1") ;
+  // bounded.setPenalty("linf") ;
+  // grpLasso2.setPenalty("l1linf") ;
+  // coopLasso.setPenalty("coop") ;
+
+  // lasso.proximal(data.get_xty(),1).print();
+  // std::cout << "\n";
+  // bounded.proximal(data.get_xty(),1).print();
+  // std::cout << "\n";
+  // grpLasso1.proximal(data.get_xty(),1).print();
+  // std::cout << "\n";
+  // grpLasso2.proximal(data.get_xty(),1).print();
+  // std::cout << "\n";
+  // coopLasso.proximal(data.get_xty(),1).print();
+  // std::cout << "\n";

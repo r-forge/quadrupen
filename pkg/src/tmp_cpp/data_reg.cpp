@@ -58,4 +58,5 @@ void REGRESSION_DATA::standardize() {
   } else {
     xty = xt * y ;
   }
+
 }

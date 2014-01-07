@@ -11,19 +11,19 @@ Description: This package fits classical sparse regression models with
     stability selection).
 License: GPL (>=2)
 Depends:
+    R (>= 3.0.2), 
+    Rcpp,	
     ggplot2,
     Matrix
 Imports:
     methods,
-    Rcpp,
-    RcppArmadillo,
     reshape2,
     scales,
     grid,
     parallel
 Suggests:
     testthat
-LinkingTo: Rcpp, RcppArmadillo
+LinkingTo: Rcpp, RcppArmadillo (>= 0.2.34)
 Collate:
     'init.R'
     'quadrupen-package.R'
