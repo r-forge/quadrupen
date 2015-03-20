@@ -141,7 +141,7 @@ double get_df_enet(double &lambda2, mat &R, mat &xAtxA, sp_mat &S, uvec &A, uwor
       B = solve(trimatu(R), eye(R.n_cols, R.n_cols));
       B = B * B.t();
     } else {
-      B = inv(sympd(xAtxA));
+      B = inv_sympd(xAtxA);
     }
     // have to do this due to sparse encoding
     // either wait for Armadillo's guy to develop non contiguous
@@ -167,7 +167,7 @@ double get_df_breg(double &lambda2, mat &xtx, sp_mat &S, uvec &A) {
   mat SAA(A.n_elem,A.n_elem) ;
 
   if (lambda2 > 0) {
-    C = inv(sympd(xtx.submat(A,A)));
+    C = inv_sympd(xtx.submat(A,A));
     // have to do this due to sparse encoding
     // either wait for Armadillo's guy to develop non contiguous
     // subview for sparse matrice or iterate over the n_zeros only...

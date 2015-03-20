@@ -77,7 +77,7 @@ void RIDGE::LetsRoll() {
     // computing the structured ridge estimate
     beta.row(i) = trans(cinvV * diagmat(eta/(square(eta) + lambda(i))) * Uty) / normx;
     // computing the estimated degrees of freedom
-    df(i) = sum(eta/(square(eta) + lambda(i)));
+    df(i) = sum(square(eta)/(square(eta) + lambda(i)));
   }
 
   // estimating the intercept term
